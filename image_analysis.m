@@ -1,4 +1,3 @@
-close all
 %% Image Analysis
 % location = input('Supply (in single quotes) filepath to an image');
 % img = imread(location);
@@ -177,10 +176,11 @@ title('Final Rendering of Centromere and Foci on SC')
 % pause(4)
 % close all
 
-%% Measurements
+%% Aberrant Detection - Minimum Eigenvalue Method
 %Determine length of chromosome and distance from centromere to all foci
 
 numCorners = zeros(1,redFound.NumObjects);
+areas = zeros(1, redFound.NumObjects); % for next step
 for i = 1:redFound.NumObjects % isolates each chromosome found
     blank = logical(a); % creates blank logical matrix
     blank(redFound.PixelIdxList{i}) = 1; % assigns all the listed pixels to 1
@@ -195,7 +195,7 @@ for i = 1:redFound.NumObjects % isolates each chromosome found
     cropped = regionprops(blank, 'image'); % tight crop
     cropped = cropped.Image;
     cropped = imtranslate(cropped,[20, 20],'OutputView','full'); % expands
-    cropped = imtranslate(cropped, [-10,-10]);% centers
+    cropped = imtranslate(cropped, [-10,-10]); % centers
     
     % smooth it so smaller corners aren't detected?
     smooth = imgaussfilt(double(cropped), 1);
@@ -209,9 +209,13 @@ for i = 1:redFound.NumObjects % isolates each chromosome found
         minEigen = 0.1;
     end
     
+    % Corner detection should become progressively more sensitive the more
+    % missing chromosomes there are.
     corners = detectMinEigenFeatures(smooth, 'minQuality', minEigen - missing);
     
     numCorners(i) = corners.length(); % 5 seems like a good cut off
+    areas(i) = size(redFound.PixelIdxList{i}, 1); % for next step
+    
     %     imshow(smooth); hold on;
     %     plot(corners.selectStrongest(4));
     %     hold off;
@@ -223,10 +227,31 @@ end
 corner_deviants = find(numCorners >= 5); % empirically chose 5 @ minEigen = 0.4275
 display(corner_deviants)
 
-chromosomes = logical(a); % creates blank logical matrix
+corners = logical(a); % creates blank logical matrix
 for x = 1:length(corner_deviants) %cycles thru aberrants
-    chromosomes(redFound.PixelIdxList{corner_deviants(x)}) = 1;
-    imshow(chromosomes),
+    corners(redFound.PixelIdxList{corner_deviants(x)}) = 1;
+    imshowpair(img, corners, 'montage'),
+    title('Potential Aberrants')
+end
+
+%% Aberrant Detection - Area Method
+close all
+
+% create graph showing distribution
+figure, bar(sort(areas));
+refline(0,median(areas) - iqr(areas))
+refline(0,median(areas))
+refline(0,median(areas) + iqr(areas))
+
+cutoffLow = median(areas) - iqr(areas);
+cutoffHigh = median(areas) + iqr(areas);
+area_deviants = find(areas <= cutoffLow | areas >= cutoffHigh);
+
+figure
+areaList = logical(a); % creates blank logical matrix
+for x = 1:length(area_deviants) %cycles thru aberrants
+    areaList(redFound.PixelIdxList{area_deviants(x)}) = 1;
+    imshowpair(img, areaList, 'montage'),
     title('Potential Aberrants')
 end
 
