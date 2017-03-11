@@ -1,3 +1,4 @@
+close all
 %% Image Analysis
 % location = input('Supply (in single quotes) filepath to an image');
 % img = imread(location);
@@ -27,17 +28,17 @@ just_blue = cat(3, a, a, blue);
 images = [img, just_red; just_green, just_blue];
 figure, montage(images,'Size', [1 1]), title('Raw Color Channels');
 
-% pause(4)
-% close
-
 %% Detection of Red
 % enhance the red of the image - counter the gradual decrease in red
 % intensity from left to right
+
 stretch = decorrstretch(red,'tol',0.02);
-darker = imadjust(stretch, stretchlim(stretch),[0.9 0.99]);
+darker = imadjust(stretch, stretchlim(stretch),[0.02 0.99]);
 
 bw = imbinarize(darker, graythresh(darker)); % binarizes with best threshold
-bwR = bwareaopen(bw, 50); % reduces background noise of binarized image
+bwSharp = bwareaopen(bw, 50); % reduces background noise of binarized image
+bwSmooth = imgaussfilt(double(bwSharp), 1); % makes the image smooth so that the fill method doesn't get confused
+bwR = imbinarize(bwSmooth, graythresh(darker)); % binarizes again
 
 %EDGE APPROACH - https://www.mathworks.com/help/images/examples/detecting-a-cell-using-image-segmentation.html
 [~, threshold] = edge(bwR, 'sobel');
@@ -84,13 +85,11 @@ end
 figure, imshowpair(img, label2rgb(labelmatrix(redFound)), 'montage')
 title(strcat(['Binarized Red Channel, Chromosomes identified = ', num2str(numFound)]))
 
-% pause(2)
-% close
 %% Detection of blue
 % females have (19 autosomal + 1 sex) centromeres == 20
 % males have (19 autosomal + 2 WEAK) centromeres == 19
 
-if ~flag
+if ~flag || redFound.NumObjects < 20 % second condition triggered by lots of overlaps
     numOfCentromeres = 20 - isMale; % searches for 20 if F, 19 if M
 else % if bad image flag has been set, assume 1 chromosome = 1 centromere
     numOfCentromeres = redFound.NumObjects;
@@ -100,6 +99,8 @@ end
 numFound = 0;
 threshold = graythresh(blue);
 bckgrndReduct = 16; % to be adjusted
+adjustCount = 0;
+adjustLimit = 2000; % to catch infinite loops -> normal is < 100
 
 while numFound ~= numOfCentromeres
     bw = imbinarize(blue, threshold); % binarizes with best threshold
@@ -111,10 +112,11 @@ while numFound ~= numOfCentromeres
     %adjust
     if numFound < numOfCentromeres && threshold > 0.005 % threshold is too high... not enough
         threshold = threshold - 0.005;
+        adjustCount = adjustCount + 1;
     elseif numFound > numOfCentromeres && threshold < 0.995% threshold is too low, too many
         threshold = threshold + 0.005;
+        adjustCount = adjustCount + 1;
     elseif threshold >= 0.995 %  max threshold used - adjust bckgrnd reduct.
-        warning('Exceptional Behavior: Max threshold used - Increasing background reduction')
         bckgrndReduct = bckgrndReduct + 1;
         threshold = graythresh(blue); %reset
     end
@@ -123,14 +125,16 @@ while numFound ~= numOfCentromeres
         warning('Repeated Exceptional Behavior - Continuing with best image')
         break
     end
+    
+    if adjustCount == adjustLimit
+        warning('Exiting infinite adjustment loop - Continuing with best image')
+        break
+    end
 end
 
 figure, imshowpair(img, label2rgb(labelmatrix(blueFound)), 'montage')
 title(strcat(['Binarized Blue Channel, Centromeres identified = ', num2str(numFound),...
     ', threshold = ', num2str(threshold)]))
-
-% pause(2)
-% close
 
 %% Detection of green
 % Legitimate green points of interest are very small - easily confused with
@@ -147,7 +151,8 @@ bw = edge(bw,'sobel', threshold * fudgeFactor);
 % enlarge
 se90 = strel('line', 2, 45);
 se0 = strel('line', 2, 0);
-bw = imdilate(bw, [se90 se0]);
+lines = imdilate(bw, [se90 se0]);
+bw = imfill(lines, 'holes');
 
 % prune away foci that don't overlap red
 bwG = bwareaopen((bwR & bw), 8);
@@ -157,60 +162,108 @@ numFound = greenFound.NumObjects;
 
 figure, imshowpair(img, bwG, 'montage'),
 title(strcat(['Binarized Green Channel, Foci identified = ', num2str(numFound)]))
-% pause(4)
-% close all
+
 %% Review the New Composite
 % Simplify the image by only green and blue areas that overlap red
 overlay = cat(3, bwR, (bwR & bwG), (bwB & bwR ));
 figure, imshowpair(img, overlay, 'montage');
 title('Final Rendering of Centromere and Foci on SC')
 
-if flag
-    error('A bad image was given. All windows will be left open. Ending.')
-end
+% if flag
+%     error('A bad image was given. All windows will be left open. Ending.')
+% end
 
-disp('Pausing for 4 seconds before closing images. Click on this window and hit ctrl-C to preserve them')
-pause(4)
-close all
+% disp('Pausing for 4 seconds before closing images. Click on this window and hit ctrl-C to preserve them')
+% pause(4)
+% close all
+
 %% Measurements
 %Determine length of chromosome and distance from centromere to all foci
 
+numCorners = zeros(1,redFound.NumObjects);
 for i = 1:redFound.NumObjects % isolates each chromosome found
-    
     blank = logical(a); % creates blank logical matrix
     blank(redFound.PixelIdxList{i}) = 1; % assigns all the listed pixels to 1
     skeleton = bwmorph(blank,'skel',Inf); % skeletonizes
     
-    % get coordinates of all points on the skeleton - use to polyfit
+    % get coordinates of all points on the skeleton DELETE - unused
     [x,y] = meshgrid(1:size(skeleton,1), 1:size(skeleton,2));
     result = [x(:),y(:),skeleton(:)]; % create list of x and y coordinates + binary value
     coords = result(result(:,3) == 1, [1 2]); % create list of all 1's
     
-    % determine best polynomial representation
-    %     R = 0; % https://www.mathworks.com/matlabcentral/newsreader/view_thread/114373
-    aggr = zeros(1,19);
-    for n = 2:20 % brute force test polynomial degrees 2 thru 20
-        [p, stretch] = polyfit(coords(:,1),coords(:,2),n); % x, y , degree
-        R = 1 - stretch.normr^2/norm(coords(:,2)-mean(coords(:,2)))^2; % the R squared value
-        aggr(n-1) = R; % compile list of R-squared values
+    % Crop and center
+    cropped = regionprops(blank, 'image'); % tight crop
+    cropped = cropped.Image;
+    cropped = imtranslate(cropped,[20, 20],'OutputView','full'); % expands
+    cropped = imtranslate(cropped, [-10,-10]);% centers
+    
+    % smooth it so smaller corners aren't detected?
+    smooth = imgaussfilt(double(cropped), 1);
+    
+    % Detect Corners
+    minEigen = 0.4275; % default...
+    missing = 0;
+    if redFound.NumObjects < 20 && redFound.NumObjects >= 12 % be more sensitive if missing any
+        missing = 0.05*(20 - redFound.NumObjects);
+    elseif redFound.NumObjects < 12 % can't let minEigen go too low
+        minEigen = 0.1;
     end
     
-    [v, degree] = max(aggr); % help? This is the best polynomial + its R-squared value
-    fprintf('The Polynomial that best describes chromosome %i is degree %i and has an R-squared value of %0.5f\n', i, degree, R)
+    corners = detectMinEigenFeatures(smooth, 'minQuality', minEigen - missing);
     
-    imshow(skeleton);
-    pause(0.5)
+    numCorners(i) = corners.length(); % 5 seems like a good cut off
+    %     imshow(smooth); hold on;
+    %     plot(corners.selectStrongest(4));
+    %     hold off;
+    
+    
 end
 
+% corners = max(numCorners) % only finds the first max
+corner_deviants = find(numCorners >= 5); % empirically chose 5 @ minEigen = 0.4275
+display(corner_deviants)
+
+chromosomes = logical(a); % creates blank logical matrix
+for x = 1:length(corner_deviants) %cycles thru aberrants
+    chromosomes(redFound.PixelIdxList{corner_deviants(x)}) = 1;
+    imshow(chromosomes),
+    title('Potential Aberrants')
+end
 
 
 % TODO
 %
 % Detect intersections and overlap between chromosomes
-%   - imageJ macro call?
+%   - implement area approach
+%   - check number of centromeres per pixelID obj
+%   x Harris Corner Detector
+%         - run on each isolated SC, count total num
+%   x Adjust image for the pixel intensity gradient (signal strength gets
+%       weaker from left to right - adjust)?
+%   ? attempt hough voting approach on the purely thresholded image
+%       -low priority because corner approach better
+%   ? imageJ macro call?
+%       -not expecting high pay off
+%
+% PROBLEMS:
+% - overlap
+%     - "how many here" 3 -> 3 new additions to pixelID list
+%     - using interaction with graphed data to select which pixelID to
+%     delete (afterward)
+% - touching
+% - disconnected chromosome
+% - unfilled in (partial as well)
+%     - smaller area, longer length
+%     - isolate and dilate ("erosion" techniques)
+%
+% - Using regionprops
+%     - 'image'
+%     - 'centroid'
+%     - 'perimeter'
+%
+% -Commit to Git!
 %
 % https://www.mathworks.com/help/matlab/data_analysis/interacting-with-graphed-data.html
-% 
-% Adjust image for the pixel intensity gradient (signal strength gets
-% weaker from left to right - adjust)?
+%
+%
 %
