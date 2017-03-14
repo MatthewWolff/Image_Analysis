@@ -173,7 +173,7 @@ title('Final Rendering of Centromere and Foci on SC')
 % end
 
 % disp('Pausing for 4 seconds before closing images. Click on this window and hit ctrl-C to preserve them')
-% pause(4)
+pause(4)
 % close all
 
 %% Aberrant Detection - Minimum Eigenvalue Method
@@ -216,9 +216,11 @@ for i = 1:redFound.NumObjects % isolates each chromosome found
     numCorners(i) = corners.length(); % 5 seems like a good cut off
     areas(i) = size(redFound.PixelIdxList{i}, 1); % for next step
     
-    %     imshow(smooth); hold on;
-    %     plot(corners.selectStrongest(4));
-    %     hold off;
+%         imshow(smooth); hold on;
+%         pause(2);
+%         plot(corners.selectStrongest(4));
+%         hold off;
+%         pause(3);
     
     
 end
@@ -239,12 +241,12 @@ close all
 
 % create graph showing distribution
 figure, bar(sort(areas));
-refline(0,median(areas) - iqr(areas))
+refline(0,median(areas) - (1 - 0.075*missing)*iqr(areas))
 refline(0,median(areas))
-refline(0,median(areas) + iqr(areas))
+refline(0,median(areas) + 0.75*iqr(areas))
 
-cutoffLow = median(areas) - iqr(areas);
-cutoffHigh = median(areas) + iqr(areas);
+cutoffLow = median(areas) - (1 - 0.075*missing)*iqr(areas);
+cutoffHigh = median(areas) + 0.75*iqr(areas);
 area_deviants = find(areas <= cutoffLow | areas >= cutoffHigh);
 
 figure
@@ -259,8 +261,9 @@ end
 % TODO
 %
 % Detect intersections and overlap between chromosomes
-%   - implement area approach
-%   - check number of centromeres per pixelID obj
+%   - implement light centromere background reduction of (bwR & bwB)
+%   - Check number of centromeres per red PixelxIDList
+%   x implement area approach
 %   x Harris Corner Detector
 %         - run on each isolated SC, count total num
 %   x Adjust image for the pixel intensity gradient (signal strength gets
@@ -269,6 +272,7 @@ end
 %       -low priority because corner approach better
 %   ? imageJ macro call?
 %       -not expecting high pay off
+%   
 %
 % PROBLEMS:
 % - overlap
@@ -291,4 +295,7 @@ end
 % https://www.mathworks.com/help/matlab/data_analysis/interacting-with-graphed-data.html
 %
 %
-%
+%   ? GUI
+%          - XY, Aberrant, Accept?
+%                 -Aberrant ?> Overlap, touching, disconnected, unfilled in
+%                     -when drawing overlap, allow to designate as XY
