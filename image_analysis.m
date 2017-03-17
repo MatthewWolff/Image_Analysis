@@ -1,7 +1,16 @@
 %% Image Analysis
 % location = input('Supply (in single quotes) filepath to an image');
 % img = imread(location);
-location = '~/Desktop/College/Research/PayseurLab/male.tif'; % DELETE
+location = '~/Desktop/College/Research/PayseurLab/female.tif'; % DELETE
+
+% % Creates list of all .tif files in the directory provided
+% files = dir(strcat(location,'/*.tif')); %finds all matching files
+% file_names = {files.name};
+% file_names = file_names'; %transpose so correct dimensions
+% file_path = cell(size(file_names,1), 1); %paste filepaths onto names
+% file_path(:) = {location};
+% file_paths = strcat(file_path,file_names);
+
 flag = false; %DELETE - to mark when a bad image has been given
 % in the case of a bad image, analysis will continue in spite of that by
 % disregarding the previous expected values (e.g. centromere #)
@@ -26,6 +35,7 @@ just_blue = cat(3, a, a, blue);
 
 images = [img, just_red; just_green, just_blue];
 figure, montage(images,'Size', [1 1]), title('Raw Color Channels');
+
 
 %% Detection of Red
 % enhance the red of the image - counter the gradual decrease in red
@@ -173,7 +183,7 @@ title('Final Rendering of Centromere and Foci on SC')
 % end
 
 % disp('Pausing for 4 seconds before closing images. Click on this window and hit ctrl-C to preserve them')
-pause(4)
+% pause(4)
 % close all
 
 %% Aberrant Detection - Minimum Eigenvalue Method
@@ -241,11 +251,11 @@ close all
 
 % create graph showing distribution
 figure, bar(sort(areas));
-refline(0,median(areas) - (1 - 0.075*missing)*iqr(areas))
+refline(0,median(areas) - (1 - 0.075*missing)*iqr(areas)) %less sensitive
 refline(0,median(areas))
 refline(0,median(areas) + 0.75*iqr(areas))
 
-cutoffLow = median(areas) - (1 - 0.075*missing)*iqr(areas);
+cutoffLow = median(areas) - (1 - 0.075*missing)*iqr(areas); %less sensitive
 cutoffHigh = median(areas) + 0.75*iqr(areas);
 area_deviants = find(areas <= cutoffLow | areas >= cutoffHigh);
 
