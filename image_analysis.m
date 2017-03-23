@@ -1,7 +1,7 @@
 %% Image Analysis
 % location = input('Supply (in single quotes) filepath to an image');
 % img = imread(location);
-location = '~/Desktop/College/Research/PayseurLab/female.tif'; % DELETE
+location = '~/Desktop/College/Research/PayseurLab/male.tif'; % DELETE
 
 % % Creates list of all .tif files in the directory provided
 % files = dir(strcat(location,'/*.tif')); %finds all matching files
@@ -107,13 +107,14 @@ end
 %defaults
 numFound = 0;
 threshold = graythresh(blue);
-bckgrndReduct = 16; % to be adjusted
+bckgrndReduct = 15; % to be adjusted
 adjustCount = 0;
 adjustLimit = 2000; % to catch infinite loops -> normal is < 100
 
 while numFound ~= numOfCentromeres
     bw = imbinarize(blue, threshold); % binarizes with best threshold
-    bwB = bwareaopen(bw, bckgrndReduct); % reduces background noise of binarized image
+    bwBRaw = bwareaopen(bw, bckgrndReduct); % reduces background noise of binarized image
+    bwB = bwareaopen(bwBRaw & bwR, bckgrndReduct); % overlap the red and blue channels to ensure 
     
     blueFound = bwconncomp(bwB, 8); % attempts to count number of objects
     numFound = blueFound.NumObjects;
@@ -258,6 +259,7 @@ refline(0,median(areas) + 0.75*iqr(areas))
 cutoffLow = median(areas) - (1 - 0.075*missing)*iqr(areas); %less sensitive
 cutoffHigh = median(areas) + 0.75*iqr(areas);
 area_deviants = find(areas <= cutoffLow | areas >= cutoffHigh);
+display(area_deviants)
 
 figure
 areaList = logical(a); % creates blank logical matrix
