@@ -179,10 +179,6 @@ overlay = cat(3, bwR, (bwR & bwG), (bwB & bwR ));
 figure, imshowpair(img, overlay, 'montage');
 title('Final Rendering of Centromere and Foci on SC')
 
-% if flag
-%     error('A bad image was given. All windows will be left open. Ending.')
-% end
-
 % disp('Pausing for 4 seconds before closing images. Click on this window and hit ctrl-C to preserve them')
 % pause(4)
 % close all
