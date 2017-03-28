@@ -1,27 +1,24 @@
 %% Image Analysis
-% location = input('Supply (in single quotes) filepath to an image');
+% location = input('Supply (in single quotes) the filepath to image folder');
 % img = imread(location);
-location = '~/Desktop/College/Research/PayseurLab/male.tif'; % DELETE
-
+location = '~/Desktop/College/Research/PayseurLab/goodmale2.tif'; % DELETE
+img = imread(location);
 % % Creates list of all .tif files in the directory provided
 % files = dir(strcat(location,'/*.tif')); %finds all matching files
 % file_names = {files.name};
-% file_names = file_names'; %transpose so correct dimensions
-% file_path = cell(size(file_names,1), 1); %paste filepaths onto names
+% file_names = file_names'; % transpose so correct dimensions
+% file_path = cell(size(file_names,1), 1); % paste filepaths onto names
 % file_path(:) = {location};
 % file_paths = strcat(file_path,file_names);
 
-flag = false; %DELETE - to mark when a bad image has been given
+flag = false; % DELETE - to mark when a bad image has been given
 % in the case of a bad image, analysis will continue in spite of that by
 % disregarding the previous expected values (e.g. centromere #)
-
-img = imread(location);
 
 % Determine if the slide is male or female from filepath
 [~,name,~] = fileparts(location);
 isFemale = regexp(name,'female');
 isMale = isempty(isFemale);
-
 
 % Split Channels -
 %https://www.mathworks.com/matlabcentral/answers/91036-split-an-color-image-to-its-3-rgb-channels
@@ -54,7 +51,7 @@ bwR = imbinarize(bwSmooth, graythresh(darker)); % binarizes again
 numFound = 0;
 dilationFactor = 90;
 fudgeFactor = .5;
-dilationOn = 3; %little differnce btwn 2 and 3, whereas 1 == off
+dilationOn = 3; %little difference btwn 2 and 3, whereas 1 == off
 
 BWs = edge(bwR,'sobel', threshold * fudgeFactor); % detect edge
 
@@ -113,9 +110,13 @@ adjustLimit = 2000; % to catch infinite loops -> normal is < 100
 
 while numFound ~= numOfCentromeres
     bw = imbinarize(blue, threshold); % binarizes with best threshold
+    
+    %TODO insert conditional threshold adjustment - if the blue area is > 0.3 of
+    %img, arbitrarily set threshold to 0.7 and run loop from there
+    
     bwBRaw = bwareaopen(bw, bckgrndReduct); % reduces background noise of binarized image
     bwB = bwareaopen(bwBRaw & bwR, bckgrndReduct); % overlap the red and blue channels to ensure 
-    
+        
     blueFound = bwconncomp(bwB, 8); % attempts to count number of objects
     numFound = blueFound.NumObjects;
     
@@ -221,18 +222,9 @@ for i = 1:redFound.NumObjects % isolates each chromosome found
     corners = detectMinEigenFeatures(smooth, 'minQuality', minEigen - missing);
     
     numCorners(i) = corners.length(); % 5 seems like a good cut off
-    areas(i) = size(redFound.PixelIdxList{i}, 1); % for next step
-    
-%         imshow(smooth); hold on;
-%         pause(2);
-%         plot(corners.selectStrongest(4));
-%         hold off;
-%         pause(3);
-    
-    
+    areas(i) = size(redFound.PixelIdxList{i}, 1); % for next step  
 end
 
-% corners = max(numCorners) % only finds the first max
 corner_deviants = find(numCorners >= 5); % empirically chose 5 @ minEigen = 0.4275
 display(corner_deviants)
 
@@ -244,8 +236,6 @@ for x = 1:length(corner_deviants) %cycles thru aberrants
 end
 
 %% Aberrant Detection - Area Method
-close all
-
 % create graph showing distribution
 figure, bar(sort(areas));
 refline(0,median(areas) - (1 - 0.075*missing)*iqr(areas)) %less sensitive
@@ -266,13 +256,16 @@ for x = 1:length(area_deviants) %cycles thru aberrants
 end
 
 
-% TODO
+%% TODO
 %
 % Detect intersections and overlap between chromosomes
-%   - implement light centromere background reduction of (bwR & bwB)
-%   - Check number of centromeres per red PixelxIDList
+%   - aberrant detection for number of centromeres per PixelxIDList blob 
+%   - use the area to decide if the threshold for blue channel needs to be bumped
+%         - make the above work WITH the blue channel's new overlay
+%         reduction
+%   x implement light centromere background reduction of (bwR & bwB)
 %   x implement area approach
-%   x Harris Corner Detector
+%   x Harris Corner Detector/Minimum Eigen Value
 %         - run on each isolated SC, count total num
 %   x Adjust image for the pixel intensity gradient (signal strength gets
 %       weaker from left to right - adjust)?
