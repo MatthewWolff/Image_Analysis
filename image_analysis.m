@@ -1,7 +1,8 @@
 %% Image Analysis
 % location = input('Supply (in single quotes) the filepath to image folder');
 % img = imread(location);
-location = '~/Desktop/College/Research/PayseurLab/goodmale2.tif'; % DELETE
+close all
+location = '~/Desktop/College/Research/PayseurLab/bluemale.tif'; % DELETE
 img = imread(location);
 % % Creates list of all .tif files in the directory provided
 % files = dir(strcat(location,'/*.tif')); %finds all matching files
@@ -20,6 +21,7 @@ flag = false; % DELETE - to mark when a bad image has been given
 isFemale = regexp(name,'female');
 isMale = isempty(isFemale);
 
+
 % Split Channels -
 %https://www.mathworks.com/matlabcentral/answers/91036-split-an-color-image-to-its-3-rgb-channels
 red = img(:,:,1); % Red channel (BW)
@@ -35,9 +37,9 @@ figure, montage(images,'Size', [1 1]), title('Raw Color Channels');
 
 
 %% Detection of Red
+
 % enhance the red of the image - counter the gradual decrease in red
 % intensity from left to right
-
 stretch = decorrstretch(red,'tol',0.02);
 darker = imadjust(stretch, stretchlim(stretch),[0.02 0.99]);
 
@@ -109,14 +111,20 @@ adjustCount = 0;
 adjustLimit = 2000; % to catch infinite loops -> normal is < 100
 
 while numFound ~= numOfCentromeres
+    % Prepare Image for counting
     bw = imbinarize(blue, threshold); % binarizes with best threshold
     
-    %TODO insert conditional threshold adjustment - if the blue area is > 0.3 of
-    %img, arbitrarily set threshold to 0.7 and run loop from there
+    %Special Case: Auto-thresholding was very bad - arbitrarily make 0.7
+    percentOfImg = sum(sum(bw))/ (size(img, 1) * size(img, 2));
+    if(adjustCount == 0 && percentOfImg > 0.2)
+        threshold = 0.7;
+        continue
+    end
     
     bwBRaw = bwareaopen(bw, bckgrndReduct); % reduces background noise of binarized image
-    bwB = bwareaopen(bwBRaw & bwR, bckgrndReduct); % overlap the red and blue channels to ensure 
-        
+    bwB = bwareaopen(bwBRaw & bwR, bckgrndReduct); % overlap the red and blue channels to ensure
+    
+    %count number of objects found
     blueFound = bwconncomp(bwB, 8); % attempts to count number of objects
     numFound = blueFound.NumObjects;
     
@@ -151,8 +159,14 @@ title(strcat(['Binarized Blue Channel, Centromeres identified = ', num2str(numFo
 % Legitimate green points of interest are very small - easily confused with
 % background noise - must try different approach:
 %  eliminate all areas of green that don't overlap red
-
 bw = imbinarize(green, graythresh(green)); % binarizes with best threshold
+
+% Special case: The foci are so faint that a bad threshold is selected
+percent_SC_covered = sum(sum(bw & bwR))/ sum(sum(bwR));
+if(percent_SC_covered > 0.3)
+    bw = imbinarize(green, 0.175); %arbitrary
+end
+
 bw = bwareaopen(bw, 4); % reduces background noise of binarized image
 
 % find foci
@@ -160,9 +174,9 @@ bw = bwareaopen(bw, 4); % reduces background noise of binarized image
 bw = edge(bw,'sobel', threshold * fudgeFactor);
 
 % enlarge
-se90 = strel('line', 2, 45);
-se0 = strel('line', 2, 0);
-lines = imdilate(bw, [se90 se0]);
+seBegin = strel('line', 2, 45);
+se = strel('line', 2, 0);
+lines = imdilate(bw, [seBegin se0]);
 bw = imfill(lines, 'holes');
 
 % prune away foci that don't overlap red
@@ -176,7 +190,7 @@ title(strcat(['Binarized Green Channel, Foci identified = ', num2str(numFound)])
 
 %% Review the New Composite
 % Simplify the image by only green and blue areas that overlap red
-overlay = cat(3, bwR, (bwR & bwG), (bwB & bwR ));
+overlay = cat(3, bwR, bwG, bwB);
 figure, imshowpair(img, overlay, 'montage');
 title('Final Rendering of Centromere and Foci on SC')
 
@@ -192,12 +206,6 @@ areas = zeros(1, redFound.NumObjects); % for next step
 for i = 1:redFound.NumObjects % isolates each chromosome found
     blank = logical(a); % creates blank logical matrix
     blank(redFound.PixelIdxList{i}) = 1; % assigns all the listed pixels to 1
-    skeleton = bwmorph(blank,'skel',Inf); % skeletonizes
-    
-    % get coordinates of all points on the skeleton DELETE - unused
-    [x,y] = meshgrid(1:size(skeleton,1), 1:size(skeleton,2));
-    result = [x(:),y(:),skeleton(:)]; % create list of x and y coordinates + binary value
-    coords = result(result(:,3) == 1, [1 2]); % create list of all 1's
     
     % Crop and center
     cropped = regionprops(blank, 'image'); % tight crop
@@ -212,7 +220,7 @@ for i = 1:redFound.NumObjects % isolates each chromosome found
     minEigen = 0.4275; % default...
     missing = 0;
     if redFound.NumObjects < 20 && redFound.NumObjects >= 12 % be more sensitive if missing any
-        missing = 0.05*(20 - redFound.NumObjects);
+        missing = 0.03*(20 - redFound.NumObjects);
     elseif redFound.NumObjects < 12 % can't let minEigen go too low
         minEigen = 0.1;
     end
@@ -222,17 +230,18 @@ for i = 1:redFound.NumObjects % isolates each chromosome found
     corners = detectMinEigenFeatures(smooth, 'minQuality', minEigen - missing);
     
     numCorners(i) = corners.length(); % 5 seems like a good cut off
-    areas(i) = size(redFound.PixelIdxList{i}, 1); % for next step  
+    areas(i) = size(redFound.PixelIdxList{i}, 1); % for next step
 end
 
 corner_deviants = find(numCorners >= 5); % empirically chose 5 @ minEigen = 0.4275
 display(corner_deviants)
 
+figure
 corners = logical(a); % creates blank logical matrix
 for x = 1:length(corner_deviants) %cycles thru aberrants
     corners(redFound.PixelIdxList{corner_deviants(x)}) = 1;
     imshowpair(img, corners, 'montage'),
-    title('Potential Aberrants')
+    title('Potential Aberrants, Corners')
 end
 
 %% Aberrant Detection - Area Method
@@ -252,17 +261,45 @@ areaList = logical(a); % creates blank logical matrix
 for x = 1:length(area_deviants) %cycles thru aberrants
     areaList(redFound.PixelIdxList{area_deviants(x)}) = 1;
     imshowpair(img, areaList, 'montage'),
-    title('Potential Aberrants')
+    title('Potential Aberrants, Area')
 end
-
+%% Measurements?
+figure
+measures = zeros(1,redFound.NumObjects);
+for i = 1:redFound.NumObjects % isolates each chromosome found
+    blank = logical(a); % creates blank logical matrix
+    blank(redFound.PixelIdxList{i}) = 1; % assigns all the listed pixels to 1
+    
+    % use perimeter function to get estimate
+    measure = regionprops(blank, 'perimeter');
+    perimFunction = measure.Perimeter/2;
+    
+    % outline
+    [~, threshold] = edge(blank, 'sobel');
+    perim = edge(blank,'sobel', threshold * fudgeFactor);
+    
+    imshow(perim)
+    perimSum = sum(sum(perim))/2;
+    %     display(perimFunction)
+    %     display(perimSum)
+    % Which method is more accurate? rip.
+    measures(i) = (perimSum - perimFunction);
+    
+end
+disp(measures)
 
 %% TODO
 %
 % Detect intersections and overlap between chromosomes
-%   - aberrant detection for number of centromeres per PixelxIDList blob 
+%   - aberrant detection for number of centromeres per PixelxIDList blob
 %   - use the area to decide if the threshold for blue channel needs to be bumped
 %         - make the above work WITH the blue channel's new overlay
 %         reduction
+% MEASURING LENGTH
+%   - Perimeter/2 - the initial curve of each end
+%       - evaluate the percent error of the diagonal vs horizontal issue by
+%       using snipped yarn on solid black background
+%
 %   x implement light centromere background reduction of (bwR & bwB)
 %   x implement area approach
 %   x Harris Corner Detector/Minimum Eigen Value
@@ -273,7 +310,7 @@ end
 %       -low priority because corner approach better
 %   ? imageJ macro call?
 %       -not expecting high pay off
-%   
+%
 %
 % PROBLEMS:
 % - overlap
@@ -298,5 +335,5 @@ end
 %
 %   ? GUI
 %          - XY, Aberrant, Accept?
-%                 -Aberrant ?> Overlap, touching, disconnected, unfilled in
+%                 -Aberrant -> Overlap, touching, disconnected, unfilled in
 %                     -when drawing overlap, allow to designate as XY
