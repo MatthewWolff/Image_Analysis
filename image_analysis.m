@@ -117,6 +117,7 @@ while numFound ~= numOfCentromeres
     %Special Case: Auto-thresholding was very bad - arbitrarily make 0.7
     percentOfImg = sum(sum(bw))/ (size(img, 1) * size(img, 2));
     if(adjustCount == 0 && percentOfImg > 0.2)
+        warning('special case thresholding: blue')
         threshold = 0.7;
         continue
     end
@@ -164,6 +165,7 @@ bw = imbinarize(green, graythresh(green)); % binarizes with best threshold
 % Special case: The foci are so faint that a bad threshold is selected
 percent_SC_covered = sum(sum(bw & bwR))/ sum(sum(bwR));
 if(percent_SC_covered > 0.3)
+    warning('special case thresholding: green')
     bw = imbinarize(green, 0.175); %arbitrary
 end
 
@@ -175,8 +177,8 @@ bw = edge(bw,'sobel', threshold * fudgeFactor);
 
 % enlarge
 seBegin = strel('line', 2, 45);
-se = strel('line', 2, 0);
-lines = imdilate(bw, [seBegin se0]);
+seEnd = strel('line', 2, 0);
+lines = imdilate(bw, [seBegin seEnd]);
 bw = imfill(lines, 'holes');
 
 % prune away foci that don't overlap red
