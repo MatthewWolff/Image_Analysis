@@ -90,6 +90,7 @@ while numFound ~= 20
     %         numFound, dilationFactor, dilationOn) %DELETE
 end
 
+%TODO compare before and after adjustment and run thru the object counter
 figure, imshowpair(img, label2rgb(labelmatrix(redFound)), 'montage')
 title(strcat(['Binarized Red Channel, Chromosomes identified = ', num2str(numFound)]))
 
@@ -291,7 +292,7 @@ for i = 1:length(all_deviants) % see what objects the user clicked on
     coords = [x,y];
     
 %     for j = 1:length(coords) 
-%     aberrants = insertShape(double(aberrants),'circle',horzcat(coords,repmat(1,size(coords,1),1)), 'color', 'red');
+%         aberrants = insertShape(double(aberrants),'circle',horzcat(coords,repmat(1,size(coords,1),1)), 'color', 'red');
 %     end
     
     match = intersect(user_input,coords,'rows'); % do any coordinates on this silhouette match?
@@ -303,6 +304,8 @@ true_aberrants(true_aberrants==0) = []; % remove all 0's
 fprintf('you have selected chromosome %i\n', true_aberrants);
 imshow(aberrants)
 
+%using splines to measure aberrants
+%evaluate two objects of same length, diagonal and horizontal
 %% Measurements?
 figure
 measures = zeros(1,redFound.NumObjects);
@@ -327,6 +330,12 @@ for i = 1:redFound.NumObjects % isolates each chromosome found
     
 end
 disp(measures)
+% TODO: Prefer the cell outline over the regionprops function
+% when measuring distance from tip to foci, use centroids
+% use a map and dijkstra's algorithm for centroid to centroid along adjacent red 
+    % make pixels that are in common with the perimeter pixels cost more
+    % [dist, path, pred] = graphshortestpath(G, S, T) provide map of values
+    % DirectedValue == false
 
 %% TODO
 %
@@ -367,11 +376,6 @@ disp(measures)
 %     - 'image'
 %     - 'centroid'
 %     - 'perimeter'
-%
-% -Commit to Git!
-%
-% https://www.mathworks.com/help/matlab/data_analysis/interacting-with-graphed-data.html
-%
 %
 %   ? GUI
 %          - XY, Aberrant, Accept?
