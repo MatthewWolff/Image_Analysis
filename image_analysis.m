@@ -2,7 +2,7 @@
 % location = input('Supply (in single quotes) the filepath to image folder');
 % img = imread(location);
 close all
-location = '~/Desktop/College/Research/PayseurLab/bluemale.tif'; % DELETE
+location = '~/Desktop/College/Research/PayseurLab/male.tif'; % DELETE
 img = imread(location);
 % % Creates list of all .tif files in the directory provided
 % files = dir(strcat(location,'/*.tif')); %finds all matching files
@@ -238,14 +238,14 @@ end
 corner_deviants = find(numCorners >= 5); % empirically chose 5 @ minEigen = 0.4275
 display(corner_deviants)
 
-figure
-corners = logical(a); % creates blank logical matrix
-for x = 1:length(corner_deviants) %cycles thru aberrants
-    corners(redFound.PixelIdxList{corner_deviants(x)}) = 1;
-    imshowpair(img, corners, 'montage'),
-    title('Potential Aberrants, Corners')
+
+corners_list = logical(a); % creates blank logical matrix
+for i = 1:length(corner_deviants) %cycles thru aberrants
+    corners_list(redFound.PixelIdxList{corner_deviants(i)}) = 1;
 end
 
+figure, imshowpair(img, corners_list, 'montage'),
+title('Potential Aberrants, Corners')
 %% Aberrant Detection - Area Method
 % create graph showing distribution
 figure, bar(sort(areas));
@@ -258,13 +258,46 @@ cutoffHigh = median(areas) + 0.75*iqr(areas);
 area_deviants = find(areas <= cutoffLow | areas >= cutoffHigh);
 display(area_deviants)
 
-figure
-areaList = logical(a); % creates blank logical matrix
-for x = 1:length(area_deviants) %cycles thru aberrants
-    areaList(redFound.PixelIdxList{area_deviants(x)}) = 1;
-    imshowpair(img, areaList, 'montage'),
-    title('Potential Aberrants, Area')
+area_list = logical(a); % creates blank logical matrix
+for i = 1:length(area_deviants) %cycles thru aberrants
+    area_list(redFound.PixelIdxList{area_deviants(i)}) = 1;
 end
+
+figure, imshowpair(img, area_list, 'montage'),
+title('Potential Aberrants, Area')
+%% User Input?
+all_deviants = unique(horzcat(area_deviants, corner_deviants)); %collects aberrants
+
+aberrants = logical(a); % creates blank logical matrix
+for i = 1:length(all_deviants) %cycles thru known aberrants
+    aberrants(redFound.PixelIdxList{all_deviants(i)}) = 1; %marks them on plot
+end
+
+aberrants = imcomplement(aberrants); % flips colors so easier to use cross-hair
+beep
+figure, imshow(aberrants), title('Please click each aberrant silhouette. Hit enter when done')
+[x,y] = ginput;
+user_input = uint64([x,y]); %cast this because it needs to match coords exactly
+
+for j = 1:length(user_input) % marks user input
+    aberrants = insertShape(double(aberrants),'circle',[x(j),y(j),3], 'color', 'red');
+end
+imshow(aberrants)
+
+true_aberrants = zeros(1,redFound.NumObjects); %pre-allocate array for matches
+for i = 1:redFound.NumObjects % see what objects the user clicked on
+    
+    [y,x] = ind2sub(size(a),redFound.PixelIdxList{i}); %somehow this returns y then x....
+    coords = [x,y];
+    
+    match = intersect(user_input,coords,'rows'); % do any coordinates on this silhouette match?
+    if ~isempty(match)
+        true_aberrants(i) = i;
+    end
+end
+true_aberrants(true_aberrants==0) = []; % remove all 0's
+fprintf('you have selected chromosome %i\n', true_aberrants);
+
 %% Measurements?
 figure
 measures = zeros(1,redFound.NumObjects);
