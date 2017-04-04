@@ -285,18 +285,23 @@ end
 imshow(aberrants)
 
 true_aberrants = zeros(1,redFound.NumObjects); %pre-allocate array for matches
-for i = 1:redFound.NumObjects % see what objects the user clicked on
-    
-    [y,x] = ind2sub(size(a),redFound.PixelIdxList{i}); %somehow this returns y then x....
+for i = 1:length(all_deviants) % see what objects the user clicked on
+   
+    [y,x] = ind2sub(size(a),redFound.PixelIdxList{all_deviants(i)}); %somehow this returns y then x....
     coords = [x,y];
+    
+%     for j = 1:length(coords) 
+%     aberrants = insertShape(double(aberrants),'circle',horzcat(coords,repmat(1,size(coords,1),1)), 'color', 'red');
+%     end
     
     match = intersect(user_input,coords,'rows'); % do any coordinates on this silhouette match?
     if ~isempty(match)
-        true_aberrants(i) = i;
+        true_aberrants(i) = all_deviants(i);
     end
 end
 true_aberrants(true_aberrants==0) = []; % remove all 0's
 fprintf('you have selected chromosome %i\n', true_aberrants);
+imshow(aberrants)
 
 %% Measurements?
 figure
