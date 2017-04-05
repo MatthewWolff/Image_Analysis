@@ -33,64 +33,71 @@ just_green = cat(3, a, green, a);
 just_blue = cat(3, a, a, blue);
 
 images = [img, just_red; just_green, just_blue];
-figure, montage(images,'Size', [1 1]), title('Raw Color Channels');
+montage(images,'Size', [1 1]), title('Raw Color Channels');
 
 
 %% Detection of Red
 
-% enhance the red of the image - counter the gradual decrease in red
-% intensity from left to right
+% normalize strength of red channel (attempt to)
 stretch = decorrstretch(red,'tol',0.02);
 darker = imadjust(stretch, stretchlim(stretch),[0.02 0.99]);
 
+% clean image
 bw = imbinarize(darker, graythresh(darker)); % binarizes with best threshold
 bwSharp = bwareaopen(bw, 50); % reduces background noise of binarized image
 bwSmooth = imgaussfilt(double(bwSharp), 1); % makes the image smooth so that the fill method doesn't get confused
 bwR = imbinarize(bwSmooth, graythresh(darker)); % binarizes again
 
-%EDGE APPROACH - https://www.mathworks.com/help/images/examples/detecting-a-cell-using-image-segmentation.html
+% evaluate
+redFound = bwconncomp(bwR, 8); % make a preliminary count of the objects
+numFound = redFound.NumObjects;
+
+% adjust image if needed
+% https://www.mathworks.com/help/images/examples/detecting-a-cell-using-image-segmentation.html
 [~, threshold] = edge(bwR, 'sobel');
-numFound = 0;
 dilationFactor = 90;
 fudgeFactor = .5;
 dilationOn = 3; %little difference btwn 2 and 3, whereas 1 == off
 
-BWs = edge(bwR,'sobel', threshold * fudgeFactor); % detect edge
-
-% adjust dilation of lines from edge detection to connect loose fragments
+BWs = edge(bwR,'sobel', threshold * fudgeFactor); % detect edges
 while numFound ~= 20
     seBegin = strel('line', dilationOn, dilationFactor); % may combine very close chromosomes
     seEnd = strel('line', dilationOn, 0); % but also will combine fragmented ones
     BWsdil = imdilate(BWs, [seBegin seEnd]); % dilates edges
     final = imfill(BWsdil, 'holes'); % fill in area within edges
     
-    redFound = bwconncomp(final, 8); % attempts to count number of objects
-    numFound = redFound.NumObjects;
+    adjusted = bwconncomp(final, 8); % attempts to count number of objects
+    numFound = adjusted.NumObjects;
     
     % attempt to adjust
     if numFound < 20 && dilationFactor > 0 % too much dilation
         dilationFactor = dilationFactor - 5;
+        continue
     elseif numFound > 20 && dilationFactor < 120 % too little dilation
         dilationFactor = dilationFactor + 5;
+        continue
     elseif numFound < 20 && dilationFactor == 0 && dilationOn ~= 1 % turns off dilation completly
         dilationOn = 1;
+        continue
     elseif numFound > 20 && dilationFactor == 120 && dilationOn < 5
         dilationFactor = 50;
         dilationOn = dilationOn + 1;
+        continue
     elseif (numFound < 20 && dilationOn == 1) || dilationFactor >= 120
-        % Dilation turned off, still can't do it... exit
-        %         figure, imshowpair(img, label2rgb(labelmatrix(CC)), 'montage')
-        %         title(strcat(['Failed, Chromosomes identified = ', num2str(numFound)]))
         warning('Bad image')
         beep
         flag = true;
         break
     end
-    %     fprintf('NumFound: %i; Dilation Factor: %d; Dilation: %i\n',...
-    %         numFound, dilationFactor, dilationOn) %DELETE
+    
+    % this statement will only be reached when loop is exiting
+    % if dilation fixed anything, uses the adjusted image
+    if(adjusted.NumObjects ~= redFound.NumObjects)
+        redFound = adjusted;
+        fprintf('dilation used')
+    end
 end
 
-%TODO compare before and after adjustment and run thru the object counter
 figure, imshowpair(img, label2rgb(labelmatrix(redFound)), 'montage')
 title(strcat(['Binarized Red Channel, Chromosomes identified = ', num2str(numFound)]))
 
@@ -104,7 +111,7 @@ else % if bad image flag has been set, assume 1 chromosome = 1 centromere
     numOfCentromeres = redFound.NumObjects;
 end
 
-%defaults
+% defaults
 numFound = 0;
 threshold = graythresh(blue);
 bckgrndReduct = 15; % to be adjusted
@@ -123,14 +130,15 @@ while numFound ~= numOfCentromeres
         continue
     end
     
-    bwBRaw = bwareaopen(bw, bckgrndReduct); % reduces background noise of binarized image
-    bwB = bwareaopen(bwBRaw & bwR, bckgrndReduct); % overlap the red and blue channels to ensure
+    % Eliminate background noise and coincidental overlap of blue and red
+    bwBRaw = bwareaopen(bw, bckgrndReduct); 
+    bwB = bwareaopen(bwBRaw & bwR, bckgrndReduct);
     
-    %count number of objects found
+    % count number of centromeres found
     blueFound = bwconncomp(bwB, 8); % attempts to count number of objects
     numFound = blueFound.NumObjects;
     
-    %adjust
+    % adjust
     if numFound < numOfCentromeres && threshold > 0.005 % threshold is too high... not enough
         threshold = threshold - 0.005;
         adjustCount = adjustCount + 1;
@@ -154,30 +162,29 @@ while numFound ~= numOfCentromeres
 end
 
 figure, imshowpair(img, label2rgb(labelmatrix(blueFound)), 'montage')
-title(strcat(['Binarized Blue Channel, Centromeres identified = ', num2str(numFound),...
-    ', threshold = ', num2str(threshold)]))
+title(strcat(['Binarized Blue Channel, Centromeres identified = ', ... 
+    num2str(numFound), ', threshold = ', num2str(threshold)]))
 
 %% Detection of green
-% Legitimate green points of interest are very small - easily confused with
-% background noise - must try different approach:
-%  eliminate all areas of green that don't overlap red
-bw = imbinarize(green, graythresh(green)); % binarizes with best threshold
+% binarize image with best threshold
+bw = imbinarize(green, graythresh(green)); 
 
 % Special case: The foci are so faint that a bad threshold is selected
-percent_SC_covered = sum(sum(bw & bwR))/ sum(sum(bwR));
+percent_SC_covered = sum(sum(bw & bwR))/ sum(sum(bwR)); % if too many foci
 if(percent_SC_covered > 0.3)
     warning('special case thresholding: green')
-    bw = imbinarize(green, 0.175); %arbitrary
+    bw = imbinarize(green, 0.175); % arbitrary threshold
 end
 
-bw = bwareaopen(bw, 4); % reduces background noise of binarized image
+%reduce background noise
+bw = bwareaopen(bw, 4);
 
 % find foci
 [~, threshold] = edge(bw, 'sobel');
 bw = edge(bw,'sobel', threshold * fudgeFactor);
 
 % enlarge
-seBegin = strel('line', 2, 45);
+seBegin = strel('line', 2, 90);
 seEnd = strel('line', 2, 0);
 lines = imdilate(bw, [seBegin seEnd]);
 bw = imfill(lines, 'holes');
@@ -185,7 +192,8 @@ bw = imfill(lines, 'holes');
 % prune away foci that don't overlap red
 bwG = bwareaopen((bwR & bw), 8);
 
-greenFound = bwconncomp(bwG, 8); % attempts to count number of objects
+% attempt to count number of foci
+greenFound = bwconncomp(bwG, 8); 
 numFound = greenFound.NumObjects;
 
 figure, imshowpair(img, bwG, 'montage'),
@@ -267,42 +275,54 @@ end
 figure, imshowpair(img, area_list, 'montage'),
 title('Potential Aberrants, Area')
 %% User Input?
-all_deviants = unique(horzcat(area_deviants, corner_deviants)); %collects aberrants
+all_deviants = unique(horzcat(area_deviants, corner_deviants)); % collects aberrants
 
 aberrants = logical(a); % creates blank logical matrix
-for i = 1:length(all_deviants) %cycles thru known aberrants
-    aberrants(redFound.PixelIdxList{all_deviants(i)}) = 1; %marks them on plot
+for i = 1:length(all_deviants) % cycles thru known aberrants
+    aberrants(redFound.PixelIdxList{all_deviants(i)}) = 1; % marks them on plot
 end
 
 aberrants = imcomplement(aberrants); % flips colors so easier to use cross-hair
+
+% display
 beep
 figure, imshow(aberrants), title('Please click each aberrant silhouette. Hit enter when done')
+figh = gcf;
+pos = get(figh,'position');
+set(figh,'position',[pos(1:2)*0.5 pos(3:4)*3]);
+
+% receive user input
 [x,y] = ginput;
-user_input = uint64([x,y]); %cast this because it needs to match coords exactly
+user_input = uint64([x,y]); % cast this because it needs to match coords exactly
 
-for j = 1:length(user_input) % marks user input
-    aberrants = insertShape(double(aberrants),'circle',[x(j),y(j),3], 'color', 'red');
+% Create circles where the user clicks
+if(size(user_input,1) > 1)
+    for i = 1:length(user_input) % marks user input
+        aberrants = insertShape(double(aberrants),'circle',[x(i),y(i),3], 'color', 'red');
+    end
+elseif size(user_input,1) == 1
+    aberrants = insertShape(double(aberrants),'circle',[x,y,3], 'color', 'red');
 end
-imshow(aberrants)
+    
+hold on, imshow(aberrants), hold off % show on same plot
 
-true_aberrants = zeros(1,redFound.NumObjects); %pre-allocate array for matches
+% See which options the user clicked on
+true_aberrants = zeros(1,redFound.NumObjects); % pre-allocate array for matches
 for i = 1:length(all_deviants) % see what objects the user clicked on
-   
-    [y,x] = ind2sub(size(a),redFound.PixelIdxList{all_deviants(i)}); %somehow this returns y then x....
+    
+    [y,x] = ind2sub(size(a),redFound.PixelIdxList{all_deviants(i)}); % somehow this returns y then x....
     coords = [x,y];
     
-%     for j = 1:length(coords) 
-%         aberrants = insertShape(double(aberrants),'circle',horzcat(coords,repmat(1,size(coords,1),1)), 'color', 'red');
-%     end
-    
-    match = intersect(user_input,coords,'rows'); % do any coordinates on this silhouette match?
+    match = intersect(user_input,coords,'rows'); % do any coordinates on this silhouette match user input?
     if ~isempty(match)
         true_aberrants(i) = all_deviants(i);
     end
 end
 true_aberrants(true_aberrants==0) = []; % remove all 0's
+
 fprintf('you have selected chromosome %i\n', true_aberrants);
-imshow(aberrants)
+pause(2)
+close(gcf)
 
 %using splines to measure aberrants
 %evaluate two objects of same length, diagonal and horizontal
@@ -332,10 +352,10 @@ end
 disp(measures)
 % TODO: Prefer the cell outline over the regionprops function
 % when measuring distance from tip to foci, use centroids
-% use a map and dijkstra's algorithm for centroid to centroid along adjacent red 
-    % make pixels that are in common with the perimeter pixels cost more
-    % [dist, path, pred] = graphshortestpath(G, S, T) provide map of values
-    % DirectedValue == false
+% use a map and dijkstra's algorithm for centroid to centroid along adjacent red
+% make pixels that are in common with the perimeter pixels cost more
+% [dist, path, pred] = graphshortestpath(G, S, T) provide map of values
+% DirectedValue == false
 
 %% TODO
 %
