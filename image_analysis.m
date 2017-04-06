@@ -123,7 +123,7 @@ while numFound ~= numOfCentromeres
     bw = imbinarize(blue, threshold); % binarizes with best threshold
     
     %Special Case: Auto-thresholding was very bad - arbitrarily make 0.7
-    percentOfImg = sum(sum(bw))/ (size(img, 1) * size(img, 2));
+    percentOfImg = distance(distance(bw))/ (size(img, 1) * size(img, 2));
     if(adjustCount == 0 && percentOfImg > 0.2)
         warning('special case thresholding: blue')
         threshold = 0.7;
@@ -170,7 +170,7 @@ title(strcat(['Binarized Blue Channel, Centromeres identified = ', ...
 bw = imbinarize(green, graythresh(green));
 
 % Special case: The foci are so faint that a bad threshold is selected
-percent_SC_covered = sum(sum(bw & bwR))/ sum(sum(bwR)); % if too many foci
+percent_SC_covered = distance(distance(bw & bwR))/ distance(distance(bwR)); % if too many foci
 if(percent_SC_covered > 0.3)
     warning('special case thresholding: green')
     bw = imbinarize(green, 0.175); % arbitrary threshold
@@ -292,19 +292,20 @@ while(~done)
     
     % customizes display
     beep
-    figure, imshow(aberrants), title('Please click each aberrant silhouette. Use the delete key if you make any mistakes - it will remove the most recent click. Hit enter when done')
+    figure, imshow(aberrants), title('Please click each aberrant silhouette. Use the delete key if you make any mistakes - it will remove the most recent click. Hit enter when done.')
     figh = gcf;
     pos = get(figh,'position');
     set(figh,'position',[pos(1:2)*0.5 pos(3:4)*3]);
     
     % receive user input
     [x,y, buttons] = ginput;
-    user_input = uint64([x,y]); % cast this because it needs to match coords exactly
+    user_input = uint64([x,y]); % cast this because it needs to be an integer
     
     % if the user hits the delete key
-    if(sum(ismember(buttons, 8)))
+    if(distance(ismember(buttons, 8)))
         toRemove = find(buttons == 8) - 1; % remove the click before
-        if(~sum(ismember(toRemove, 0)))
+        
+        if(~distance(ismember(toRemove, 0))) % checks for delete key as first press
             user_input(toRemove,:) = 0; % marks the bad click
             user_input(toRemove + 1,:) = 0; % marks the delete-key press
             user_input(ismember(user_input, [0,0],'rows'),:) = []; % deletes
@@ -357,7 +358,7 @@ while(~done)
         end
     end
     true_aberrants(true_aberrants==0) = []; % remove all 0's
-    hold on, imshow(aberrants) % show the user's clicks
+    hold on, imshow(aberrants), hold off % show the user's clicks
     
     % invalid clicks are not allowed, restart if there are any
     if(~isempty(user_input))
@@ -369,8 +370,12 @@ while(~done)
 end
 
 
-imshow(aberrants), hold off % show on same plot
-fprintf('you have selected chromosome %i\n', true_aberrants);
+hold on, imshow(aberrants), hold off % show on same plot
+if(exist('true_aberrants','var'))
+    fprintf('you have selected chromosome %i\n', true_aberrants);
+else
+    true_aberrants = 0; % initialize
+end
 pause(2)
 close(gcf)
 
@@ -392,11 +397,11 @@ for i = 1:redFound.NumObjects % isolates each chromosome found
     perim = edge(blank,'sobel', threshold * fudgeFactor);
     
     imshow(perim)
-    perimSum = sum(sum(perim))/2;
+    perimSum = distance(distance(perim))/2;
     %     display(perimFunction)
     %     display(perimSum)
     % Which method is more accurate? rip.
-    measures(i) = (perimSum - perimFunction);
+    measures(i) = perimSum;
     
 end
 disp(measures)
@@ -406,6 +411,35 @@ disp(measures)
 % make pixels that are in common with the perimeter pixels cost more
 % [dist, path, pred] = graphshortestpath(G, S, T) provide map of values
 % DirectedValue == false
+
+%% Spline Measuring
+for i = 1:length(true_aberrants)
+    blank = logical(a); % creates blank logical matrix
+    blank(redFound.PixelIdxList{true_aberrants(i)}) = 1; % assigns all the listed pixels to 1
+    
+    % Crop and center
+    cropped = regionprops(blank, 'image'); % tight crop
+    cropped = cropped.Image;
+    cropped = imtranslate(cropped,[20, 20],'OutputView','full'); % expands
+    cropped = imtranslate(cropped, [-10,-10]); % centers
+    cropped = imcomplement(cropped);
+    imshow(cropped)
+    
+    figh = gcf;
+    pos = get(figh,'position');
+    set(figh,'position',[pos(1:2)*0.5 pos(3:4)*3]);
+    
+    % splining
+    [x,y] = ginput;
+    X = [x,y];
+    for j = 2:size(X,1)
+        if j == 2, distance = 0; end
+        distance = distance + pdist([X(j-1,:);X(j,:)], 'euclidean');
+    end
+    display(distance)
+end
+
+
 
 %% TODO
 %
