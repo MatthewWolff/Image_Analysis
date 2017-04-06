@@ -131,7 +131,7 @@ while numFound ~= numOfCentromeres
     end
     
     % Eliminate background noise and coincidental overlap of blue and red
-    bwBRaw = bwareaopen(bw, bckgrndReduct); 
+    bwBRaw = bwareaopen(bw, bckgrndReduct);
     bwB = bwareaopen(bwBRaw & bwR, bckgrndReduct);
     
     % count number of centromeres found
@@ -162,12 +162,12 @@ while numFound ~= numOfCentromeres
 end
 
 figure, imshowpair(img, label2rgb(labelmatrix(blueFound)), 'montage')
-title(strcat(['Binarized Blue Channel, Centromeres identified = ', ... 
+title(strcat(['Binarized Blue Channel, Centromeres identified = ', ...
     num2str(numFound), ', threshold = ', num2str(threshold)]))
 
 %% Detection of green
 % binarize image with best threshold
-bw = imbinarize(green, graythresh(green)); 
+bw = imbinarize(green, graythresh(green));
 
 % Special case: The foci are so faint that a bad threshold is selected
 percent_SC_covered = sum(sum(bw & bwR))/ sum(sum(bwR)); % if too many foci
@@ -193,7 +193,7 @@ bw = imfill(lines, 'holes');
 bwG = bwareaopen((bwR & bw), 8);
 
 % attempt to count number of foci
-greenFound = bwconncomp(bwG, 8); 
+greenFound = bwconncomp(bwG, 8);
 numFound = greenFound.NumObjects;
 
 figure, imshowpair(img, bwG, 'montage'),
@@ -283,43 +283,93 @@ for i = 1:length(all_deviants) % cycles thru known aberrants
 end
 
 aberrants = imcomplement(aberrants); % flips colors so easier to use cross-hair
+refresh = aberrants;
 
-% display
-beep
-figure, imshow(aberrants), title('Please click each aberrant silhouette. Hit enter when done')
-figh = gcf;
-pos = get(figh,'position');
-set(figh,'position',[pos(1:2)*0.5 pos(3:4)*3]);
-
-% receive user input
-[x,y] = ginput;
-user_input = uint64([x,y]); % cast this because it needs to match coords exactly
-
-% Create circles where the user clicks
-if(size(user_input,1) > 1)
-    for i = 1:length(user_input) % marks user input
-        aberrants = insertShape(double(aberrants),'circle',[x(i),y(i),3], 'color', 'red');
+done = false; % sentinel value for completion
+while(~done)
+    
+    aberrants = refresh; % makes sure the user receives a fresh image
+    
+    % customizes display
+    beep
+    figure, imshow(aberrants), title('Please click each aberrant silhouette. Use the delete key if you make any mistakes - it will remove the most recent click. Hit enter when done')
+    figh = gcf;
+    pos = get(figh,'position');
+    set(figh,'position',[pos(1:2)*0.5 pos(3:4)*3]);
+    
+    % receive user input
+    [x,y, buttons] = ginput;
+    user_input = uint64([x,y]); % cast this because it needs to match coords exactly
+    
+    % if the user hits the delete key
+    if(sum(ismember(buttons, 8)))
+        toRemove = find(buttons == 8) - 1; % remove the click before
+        if(~sum(ismember(toRemove, 0)))
+            user_input(toRemove,:) = 0; % marks the bad click
+            user_input(toRemove + 1,:) = 0; % marks the delete-key press
+            user_input(ismember(user_input, [0,0],'rows'),:) = []; % deletes
+            % corrects coordinates too
+            x = user_input(:,1);
+            y = user_input(:,2);
+        else
+            uiwait(msgbox('Delete-key pressed too early.','Warning','modal'));
+            close(gcf)
+            continue
+        end
     end
-elseif size(user_input,1) == 1
-    aberrants = insertShape(double(aberrants),'circle',[x,y,3], 'color', 'red');
-end
     
-hold on, imshow(aberrants), hold off % show on same plot
-
-% See which options the user clicked on
-true_aberrants = zeros(1,redFound.NumObjects); % pre-allocate array for matches
-for i = 1:length(all_deviants) % see what objects the user clicked on
+    % Create circles where the user clicks
+    if(size(user_input,1) > 1)
+        for i = 1:length(user_input) % marks user input
+            aberrants = insertShape(double(aberrants),'circle',[x(i),y(i),3], 'color', 'red');
+        end
+    elseif size(user_input,1) == 1
+        aberrants = insertShape(double(aberrants),'circle',[x,y,3], 'color', 'red');
+    elseif size(user_input,1) == 0
+        break % user didn't want to mark any aberrants
+    end
     
-    [y,x] = ind2sub(size(a),redFound.PixelIdxList{all_deviants(i)}); % somehow this returns y then x....
-    coords = [x,y];
+    % See which options the user clicked on
+    true_aberrants = zeros(1,redFound.NumObjects); % pre-allocate array for matches
+    for i = 1:length(all_deviants) % see what objects the user clicked on
+        
+        [y,x] = ind2sub(size(a),redFound.PixelIdxList{all_deviants(i)}); % somehow this returns y then x....
+        coords = [x,y];
+        
+        match = intersect(user_input,coords,'rows'); % do any coordinates on this silhouette match user input?
+        if ~isempty(match)
+            true_aberrants(i) = all_deviants(i); % adds confirmed aberrant to list
+            aberrants = insertShape(double(aberrants),'circle',[match(1,1),match(1,2),3],...
+                'color', 'green','LineWidth', 2); % confirms it on picture
+            
+            if(size(match,1) > 1) % if user clicked same chromosome multiple times, turns those green
+                for j = 2:(size(match,1))
+                    aberrants = insertShape(double(aberrants),'circle',[match(j,1),match(j,2),3],...
+                        'color', 'green','LineWidth', 2); % confirms it on picture
+                end
+            end
+            
+            % Only keep track of user input that doesn't find a match
+            toRemove = find(ismember(user_input, match,'rows'));
+            if(~isempty(toRemove)) % in case user clicks on same chromosome twice
+                user_input(toRemove, :) = [];
+            end
+        end
+    end
+    true_aberrants(true_aberrants==0) = []; % remove all 0's
+    hold on, imshow(aberrants) % show the user's clicks
     
-    match = intersect(user_input,coords,'rows'); % do any coordinates on this silhouette match user input?
-    if ~isempty(match)
-        true_aberrants(i) = all_deviants(i);
+    % invalid clicks are not allowed, restart if there are any
+    if(~isempty(user_input))
+        uiwait(msgbox('Not all user input points were found.','Warning','modal'));
+        close(gcf)
+    else
+        done = true;
     end
 end
-true_aberrants(true_aberrants==0) = []; % remove all 0's
 
+
+imshow(aberrants), hold off % show on same plot
 fprintf('you have selected chromosome %i\n', true_aberrants);
 pause(2)
 close(gcf)
