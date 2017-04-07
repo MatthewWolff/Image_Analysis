@@ -123,7 +123,7 @@ while numFound ~= numOfCentromeres
     bw = imbinarize(blue, threshold); % binarizes with best threshold
     
     %Special Case: Auto-thresholding was very bad - arbitrarily make 0.7
-    percentOfImg = distance(distance(bw))/ (size(img, 1) * size(img, 2));
+    percentOfImg = sum(sum(bw))/ (size(img, 1) * size(img, 2));
     if(adjustCount == 0 && percentOfImg > 0.2)
         warning('special case thresholding: blue')
         threshold = 0.7;
@@ -170,7 +170,7 @@ title(strcat(['Binarized Blue Channel, Centromeres identified = ', ...
 bw = imbinarize(green, graythresh(green));
 
 % Special case: The foci are so faint that a bad threshold is selected
-percent_SC_covered = distance(distance(bw & bwR))/ distance(distance(bwR)); % if too many foci
+percent_SC_covered = sum(sum(bw & bwR))/ sum(sum(bwR)); % if too many foci
 if(percent_SC_covered > 0.3)
     warning('special case thresholding: green')
     bw = imbinarize(green, 0.175); % arbitrary threshold
@@ -302,10 +302,10 @@ while(~done)
     user_input = uint64([x,y]); % cast this because it needs to be an integer
     
     % if the user hits the delete key
-    if(distance(ismember(buttons, 8)))
+    if(sum(ismember(buttons, 8)))
         toRemove = find(buttons == 8) - 1; % remove the click before
         
-        if(~distance(ismember(toRemove, 0))) % checks for delete key as first press
+        if(~sum(ismember(toRemove, 0))) % checks for delete key as first press
             user_input(toRemove,:) = 0; % marks the bad click
             user_input(toRemove + 1,:) = 0; % marks the delete-key press
             user_input(ismember(user_input, [0,0],'rows'),:) = []; % deletes
@@ -397,7 +397,7 @@ for i = 1:redFound.NumObjects % isolates each chromosome found
     perim = edge(blank,'sobel', threshold * fudgeFactor);
     
     imshow(perim)
-    perimSum = distance(distance(perim))/2;
+    perimSum = sum(sum(perim))/2;
     %     display(perimFunction)
     %     display(perimSum)
     % Which method is more accurate? rip.
