@@ -2,7 +2,7 @@
 % location = input('Supply (in single quotes) the filepath to image folder');
 % img = imread(location);
 close all
-location = '~/Desktop/College/Research/PayseurLab/mess.tif'; % DELETE
+location = '~/Desktop/College/Research/PayseurLab/male.tif'; % DELETE
 img = imread(location);
 % % Creates list of all .tif files in the directory provided
 % files = dir(strcat(location,'/*.tif')); %finds all matching files
@@ -380,7 +380,8 @@ close(gcf)
 %evaluate two objects of same length, diagonal and horizontal
 %% Measurements?
 figure
-measures = zeros(1,redFound.NumObjects);
+measures = zeros(1, redFound.NumObjects);
+outlines = cell(1, redFound.NumObjects);
 for i = 1:redFound.NumObjects % isolates each chromosome found
     blank = logical(a); % creates blank logical matrix
     blank(redFound.PixelIdxList{i}) = 1; % assigns all the listed pixels to 1
@@ -392,7 +393,8 @@ for i = 1:redFound.NumObjects % isolates each chromosome found
     % outline
     [~, threshold] = edge(blank, 'sobel');
     perim = edge(blank,'sobel', threshold * fudgeFactor);
-    
+    outlines(i) = {double(perim)}; % save outline for later use
+
     imshow(perim)
     perimSum = sum(sum(perim))/2;
     %     display(perimFunction)
@@ -402,6 +404,33 @@ for i = 1:redFound.NumObjects % isolates each chromosome found
     
 end
 disp(measures)
+%% Dijkstra's Approach to automated measuring of inter-foci distance
+
+%create a map
+overall = overlay;
+overall(overall ~= 0) = 0;
+for i = 1:redFound.NumObjects
+    if(sum(true_aberrants == i)) % will skip any aberrants
+        continue
+    end
+    
+    map = double(a); % blank map of 0's
+    map(redFound.PixelIdxList{i}) = 2; % map of chromosome
+    skeleton = double(bwmorph(map,'skel',Inf)); % saves skeletal chromosome
+    
+    map = map + 2*outlines{i}; % makes the perimeter higher cost
+    map(skeleton == 1) = 1; % makes the skeletal path the lowest cost
+    map(map == 0) = realmax; % all black cells == all unusable
+    
+    % display - DELETE
+    blank = logical(a); blank(redFound.PixelIdxList{i}) = 1;    
+    overall = overall + cat(3, blank, logical(skeleton), logical(outlines{i}));
+    imshowpair(img, overall, 'montage'); hold on
+    
+    % find centroids of foci and centromere
+    
+%     [dist, path, pred] = graphshortestpath(map, Start, Terminal, 'Directed', 'false');
+end
 % TODO: PERIMETER: Prefer the cell outline method over the regionprops method
 % ? when measuring distance from tip to foci, use centroids
 % ? use a map and dijkstra's algorithm from foci centroid to centromere centroid,
@@ -411,9 +440,8 @@ disp(measures)
 %     ? overlay skeletonized bwR - cost of 1
 %     ? all other pixels on bwR will be cost 2?
 %     ? black pixels = realmax % ($MACHINE.MAX.INT)
-% [dist, path, pred] = graphshortestpath(G, S, T) provide map of values
-% parameter: DirectedValue == false
-
+% [dist, path, pred] = graphshortestpath(Graph, Start, Terminal, 'Directed', 'false') provide map of values
+return
 %% Spline Measuring
 for i = 1:length(true_aberrants)
     blank = logical(a); % creates blank logical matrix
