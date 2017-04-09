@@ -2,7 +2,7 @@
 % location = input('Supply (in single quotes) the filepath to image folder');
 % img = imread(location);
 close all
-location = '~/Desktop/College/Research/PayseurLab/male.tif'; % DELETE
+location = '~/Desktop/College/Research/PayseurLab/mess.tif'; % DELETE
 img = imread(location);
 % % Creates list of all .tif files in the directory provided
 % files = dir(strcat(location,'/*.tif')); %finds all matching files
@@ -245,8 +245,6 @@ for i = 1:redFound.NumObjects % isolates each chromosome found
 end
 
 corner_deviants = find(numCorners >= 5); % empirically chose 5 @ minEigen = 0.4275
-display(corner_deviants)
-
 
 corners_list = logical(a); % creates blank logical matrix
 for i = 1:length(corner_deviants) %cycles thru aberrants
@@ -265,7 +263,6 @@ refline(0,median(areas) + 0.75*iqr(areas))
 cutoffLow = median(areas) - (1 - 0.075*missing)*iqr(areas); %less sensitive
 cutoffHigh = median(areas) + 0.75*iqr(areas);
 area_deviants = find(areas <= cutoffLow | areas >= cutoffHigh);
-display(area_deviants)
 
 area_list = logical(a); % creates blank logical matrix
 for i = 1:length(area_deviants) %cycles thru aberrants
@@ -405,12 +402,17 @@ for i = 1:redFound.NumObjects % isolates each chromosome found
     
 end
 disp(measures)
-% TODO: Prefer the cell outline over the regionprops function
-% when measuring distance from tip to foci, use centroids
-% use a map and dijkstra's algorithm for centroid to centroid along adjacent red
-% make pixels that are in common with the perimeter pixels cost more
+% TODO: PERIMETER: Prefer the cell outline method over the regionprops method
+% ? when measuring distance from tip to foci, use centroids
+% ? use a map and dijkstra's algorithm from foci centroid to centromere centroid,
+%   only along adjacent red
+% TODO: DIJKSTRA MAP (where bwR = the PixelIDxList isolated chromosome)
+%     ? overlay the cell outline with bwR - high cost
+%     ? overlay skeletonized bwR - cost of 1
+%     ? all other pixels on bwR will be cost 2?
+%     ? black pixels = realmax % ($MACHINE.MAX.INT)
 % [dist, path, pred] = graphshortestpath(G, S, T) provide map of values
-% DirectedValue == false
+% parameter: DirectedValue == false
 
 %% Spline Measuring
 for i = 1:length(true_aberrants)
@@ -443,29 +445,16 @@ end
 
 %% TODO
 %
-% Detect intersections and overlap between chromosomes
-%   - aberrant detection for number of centromeres per PixelxIDList blob
-%   - use the area to decide if the threshold for blue channel needs to be bumped
-%         - make the above work WITH the blue channel's new overlay
+%   - Detect intersections and overlap between chromosomes
+%       - aberrant detection for number of centromeres per PixelxIDList blob
+%       - use the area to decide if the threshold for blue channel needs to be bumped
+%       - make the above work WITH the blue channel's new overlay
 %         reduction
-% MEASURING LENGTH
-%   - Perimeter/2 - the initial curve of each end
-%       - evaluate the percent error of the diagonal vs horizontal issue by
+% 
+%   - evaluate the percent error of the diagonal vs horizontal issue by
 %       using snipped yarn on solid black background
 %
-%   x implement light centromere background reduction of (bwR & bwB)
-%   x implement area approach
-%   x Harris Corner Detector/Minimum Eigen Value
-%         - run on each isolated SC, count total num
-%   x Adjust image for the pixel intensity gradient (signal strength gets
-%       weaker from left to right - adjust)?
-%   ? attempt hough voting approach on the purely thresholded image
-%       -low priority because corner approach better
-%   ? imageJ macro call?
-%       -not expecting high pay off
-%
-%
-% PROBLEMS:
+% Problem Cases:
 % - overlap
 %     - "how many here" 3 -> 3 new additions to pixelID list
 %     - using interaction with graphed data to select which pixelID to
@@ -482,6 +471,6 @@ end
 %     - 'perimeter'
 %
 %   ? GUI
-%          - XY, Aberrant, Accept?
+%          - XY, Aberrant, Accept, Delete?
 %                 -Aberrant -> Overlap, touching, disconnected, unfilled in
 %                     -when drawing overlap, allow to designate as XY
