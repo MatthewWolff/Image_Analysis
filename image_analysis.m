@@ -2,7 +2,7 @@
 % location = input('Supply (in single quotes) the filepath to image folder');
 % img = imread(location);
 close all
-location = '~/Desktop/College/Research/PayseurLab/male.tif'; % DELETE
+location = '~/Desktop/College/Research/PayseurLab/female.tif'; % DELETE
 img = imread(location);
 % % Creates list of all .tif files in the directory provided
 % files = dir(strcat(location,'/*.tif')); %finds all matching files
@@ -282,6 +282,7 @@ end
 aberrants = imcomplement(aberrants); % flips colors so easier to use cross-hair
 refresh = aberrants;
 
+clear('true_aberrants') % clears out any previous data
 done = false; % sentinel value for completion
 while(~done)
     
@@ -403,7 +404,6 @@ for i = 1:redFound.NumObjects % isolates each chromosome found
     measures(i) = perimSum;
     
 end
-disp(measures)
 %% Dijkstra's Approach to automated measuring of inter-foci distance
 
 %create a map
@@ -414,22 +414,41 @@ for i = 1:redFound.NumObjects
         continue
     end
     
-    map = double(a); % blank map of 0's
-    map(redFound.PixelIdxList{i}) = 2; % map of chromosome
+    body = logical(a); % blank map of 0's
+    body(redFound.PixelIdxList{i}) = 1; % body of chromosome
+    map = 2*double(body); % begins map creation
     skeleton = double(bwmorph(map,'skel',Inf)); % saves skeletal chromosome
     
     map = map + 2*outlines{i}; % makes the perimeter higher cost
     map(skeleton == 1) = 1; % makes the skeletal path the lowest cost
-    map(map == 0) = realmax; % all black cells == all unusable
     
     % display - DELETE
     blank = logical(a); blank(redFound.PixelIdxList{i}) = 1;    
     overall = overall + cat(3, blank, logical(skeleton), logical(outlines{i}));
     imshowpair(img, overall, 'montage'); hold on
     
-    % find centroids of foci and centromere
+    % find centroid of centromere
+    centromere = regionprops(body & bwB, 'centroid');
+    centromere = struct2cell(centromere);
+    centromere = int64(centromere{1}); % unpack the structure
+%     overall = insertShape(overall,'circle',[centromere(1),centromere(2),6], 'color', 'blue'); % DELETE
+
+    % find centroids of foci
+    foci = regionprops(body & bwG, 'centroid');
+    foci = int64(cat(1, foci.Centroid));
+%     overall = insertShape(overall,'circle',[foci(:,1),foci(:,2),repmat(6,size(foci,1),1)], 'color', 'green'); % DELETE
+%     imshow(overall) % DELETE
     
-%     [dist, path, pred] = graphshortestpath(map, Start, Terminal, 'Directed', 'false');
+    % make 'map' square
+    if(size(map,1) < size(map,2))
+        map = imtranslate(map,[0, size(map,2) - size(map,1)],'OutputView','full'); % expands
+    elseif(size(map,1) > size(map,2))
+        map = imtranslate(map,[0, size(map,1) - size(map,2)],'OutputView','full'); % expands
+    end
+    
+    map(map == 0) = Inf; % black pixels are unusable
+    map = sparse(map);
+    [dist, path, pred] = graphshortestpath(map, centromere, foci(1), 'Directed', 'false'); % centromere to first foci
 end
 % TODO: PERIMETER: Prefer the cell outline method over the regionprops method
 % ? when measuring distance from tip to foci, use centroids
