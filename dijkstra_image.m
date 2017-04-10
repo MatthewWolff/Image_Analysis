@@ -1,4 +1,4 @@
-function dist = dijkstra_image(map, source, goal)
+function [dist] = dijkstra_image(map, source, goal)
 %assumes that source and goal are (column, row) coordinates, not linear indices
 % Based off this Java code: http://cs.fit.edu/~ryan/java/programs/graph/Dijkstra-java.html
 
@@ -53,7 +53,6 @@ end
 %     trace = predecessor(node(trace));
 % end
 % display(flip(path)
-display(distance(node(terminal)))
 dist = distance(node(terminal));
 
 end

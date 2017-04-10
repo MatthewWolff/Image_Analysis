@@ -409,7 +409,7 @@ end
 %create a map
 overall = overlay;
 overall(overall ~= 0) = 0;
-for i = 1:redFound.NumObjects
+for i = 1%:redFound.NumObjects
     if(sum(true_aberrants == i)) % will skip any aberrants
         continue
     end
@@ -439,28 +439,9 @@ for i = 1:redFound.NumObjects
 %     overall = insertShape(overall,'circle',[foci(:,1),foci(:,2),repmat(6,size(foci,1),1)], 'color', 'green'); % DELETE
 %     imshow(overall) % DELETE
     
-    % make 'map' square
-    if(size(map,1) < size(map,2))
-        map = imtranslate(map,[0, size(map,2) - size(map,1)],'OutputView','full'); % expands
-    elseif(size(map,1) > size(map,2))
-        map = imtranslate(map,[0, size(map,1) - size(map,2)],'OutputView','full'); % expands
-    end
-    
-    map(map == 0) = Inf; % black pixels are unusable
-    map = sparse(map);
-    [dist, path, pred] = graphshortestpath(map, centromere, foci(1), 'Directed', 'false'); % centromere to first foci
+    dijkstra_image(map, centromere, foci(1,:))
 end
-% TODO: PERIMETER: Prefer the cell outline method over the regionprops method
-% ? when measuring distance from tip to foci, use centroids
-% ? use a map and dijkstra's algorithm from foci centroid to centromere centroid,
-%   only along adjacent red
-% TODO: DIJKSTRA MAP (where bwR = the PixelIDxList isolated chromosome)
-%     ? overlay the cell outline with bwR - high cost
-%     ? overlay skeletonized bwR - cost of 1
-%     ? all other pixels on bwR will be cost 2?
-%     ? black pixels = realmax % ($MACHINE.MAX.INT)
-% [dist, path, pred] = graphshortestpath(Graph, Start, Terminal, 'Directed', 'false') provide map of values
-return
+% TODO: write code to do interfocal distances too
 %% Spline Measuring
 for i = 1:length(true_aberrants)
     blank = logical(a); % creates blank logical matrix
