@@ -1,5 +1,6 @@
 function dist = dijkstra_image(map, source, goal)
 %assumes that source and goal are (column, row) coordinates, not linear indices
+% Based off this Java code: http://cs.fit.edu/~ryan/java/programs/graph/Dijkstra-java.html
 
 assert(length(size(map)) == 2)
 get_weight = @(c) map(c(1),c(2));
