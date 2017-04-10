@@ -2,7 +2,7 @@
 % location = input('Supply (in single quotes) the filepath to image folder');
 % img = imread(location);
 close all
-location = '~/Desktop/College/Research/PayseurLab/female.tif'; % DELETE
+location = '~/Desktop/College/Research/PayseurLab/male.tif'; % DELETE
 img = imread(location);
 % % Creates list of all .tif files in the directory provided
 % files = dir(strcat(location,'/*.tif')); %finds all matching files
@@ -376,11 +376,7 @@ else
 end
 pause(2)
 close(gcf)
-
-%using splines to measure aberrants
-%evaluate two objects of same length, diagonal and horizontal
 %% Measurements?
-figure
 measures = zeros(1, redFound.NumObjects);
 outlines = cell(1, redFound.NumObjects);
 for i = 1:redFound.NumObjects % isolates each chromosome found
@@ -395,21 +391,17 @@ for i = 1:redFound.NumObjects % isolates each chromosome found
     [~, threshold] = edge(blank, 'sobel');
     perim = edge(blank,'sobel', threshold * fudgeFactor);
     outlines(i) = {double(perim)}; % save outline for later use
-
-    imshow(perim)
-    perimSum = sum(sum(perim))/2;
-    %     display(perimFunction)
-    %     display(perimSum)
-    % Which method is more accurate? rip.
-    measures(i) = perimSum;
     
+    perimSum = sum(sum(perim))/2;
+    measures(i) = perimSum;
 end
+
 %% Dijkstra's Approach to automated measuring of inter-foci distance
 
 %create a map
 overall = overlay;
 overall(overall ~= 0) = 0;
-for i = 1%:redFound.NumObjects
+for i = 1:redFound.NumObjects
     if(sum(true_aberrants == i)) % will skip any aberrants
         continue
     end
@@ -423,25 +415,39 @@ for i = 1%:redFound.NumObjects
     map(skeleton == 1) = 1; % makes the skeletal path the lowest cost
     
     % display - DELETE
-    blank = logical(a); blank(redFound.PixelIdxList{i}) = 1;    
+    blank = logical(a); blank(redFound.PixelIdxList{i}) = 1;
     overall = overall + cat(3, blank, logical(skeleton), logical(outlines{i}));
     imshowpair(img, overall, 'montage'); hold on
     
     % find centroid of centromere
     centromere = regionprops(body & bwB, 'centroid');
+    if(isempty(centromere)) % skip this chromosome if there aren't any centromeres
+        warning('ABERRANT GOT THROUGH')
+        continue,
+    end
     centromere = struct2cell(centromere);
     centromere = int64(centromere{1}); % unpack the structure
-%     overall = insertShape(overall,'circle',[centromere(1),centromere(2),6], 'color', 'blue'); % DELETE
-
+    %     overall = insertShape(overall,'circle',[centromere(1),centromere(2),6], 'color', 'blue'); % DELETE
+    
     % find centroids of foci
     foci = regionprops(body & bwG, 'centroid');
+    if(isempty(foci)), continue, end % skip this chromosome if there aren't any foci
     foci = int64(cat(1, foci.Centroid));
-%     overall = insertShape(overall,'circle',[foci(:,1),foci(:,2),repmat(6,size(foci,1),1)], 'color', 'green'); % DELETE
-%     imshow(overall) % DELETE
+    %     overall = insertShape(overall,'circle',[foci(:,1),foci(:,2),repmat(6,size(foci,1),1)], 'color', 'green'); % DELETE
+    %     imshow(overall)
     
-    dijkstra_image(map, centromere, foci(1,:))
+    [distance, path] = dijkstra_image(map, centromere, foci(1,:));
+    
 end
-% TODO: write code to do interfocal distances too
+
+% body = double(body);
+% body(path) = 0;
+% body = imcomplement(body);
+% body = insertShape(body,'circle',[foci(:,1),foci(:,2),repmat(3,size(foci,1),1)], 'color', 'green'); % DELETE
+% body = insertShape(body,'circle',[centromere(1),centromere(2),3], 'color', 'blue'); % DELETE
+% imshow(body) % DELETE
+% TODO: write code to do interfocal distances, and make sure all data is
+% stored
 %% Spline Measuring
 for i = 1:length(true_aberrants)
     blank = logical(a); % creates blank logical matrix
@@ -468,8 +474,9 @@ for i = 1:length(true_aberrants)
     end
     display(distance)
 end
-
-
+% TODO: store distances
+%using splines to measure aberrants
+%evaluate two objects of same length, diagonal and horizontal
 
 %% TODO
 %
@@ -478,7 +485,7 @@ end
 %       - use the area to decide if the threshold for blue channel needs to be bumped
 %       - make the above work WITH the blue channel's new overlay
 %         reduction
-% 
+%
 %   - evaluate the percent error of the diagonal vs horizontal issue by
 %       using snipped yarn on solid black background
 %
