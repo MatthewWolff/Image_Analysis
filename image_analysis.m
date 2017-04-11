@@ -251,8 +251,7 @@ for i = 1:length(corner_deviants) %cycles thru aberrants
     corners_list(redFound.PixelIdxList{corner_deviants(i)}) = 1;
 end
 
-figure, imshowpair(img, corners_list, 'montage'),
-title('Potential Aberrants, Corners')
+figure, imshow(corners_list),title('Potential Aberrants, Corners')
 %% Aberrant Detection - Area Method
 % create graph showing distribution
 figure, bar(sort(areas));
@@ -269,10 +268,29 @@ for i = 1:length(area_deviants) %cycles thru aberrants
     area_list(redFound.PixelIdxList{area_deviants(i)}) = 1;
 end
 
-figure, imshowpair(img, area_list, 'montage'),
-title('Potential Aberrants, Area')
+figure, imshow(area_list),title('Potential Aberrants, Area')
+%% Aberrant Detection - Centromere method
+centromere_deviants = zeros(1,redFound.NumObjects);
+for i = 1:redFound.NumObjects
+    blank = logical(a); % creates blank logical matrix
+    blank(redFound.PixelIdxList{i}) = 1; % plots chromosome
+    centromeres = bwconncomp(bwB & blank, 8); % plots only the overlap
+    
+    %evaluate if aberrant
+    if(centromeres.NumObjects ~= 1) 
+        centromere_deviants(i) = i;
+    end
+end
+centromere_deviants = find(centromere_deviants ~= 0); % clean out zeros
+
+centromere_list = logical(a);
+for i = 1:length(centromere_deviants) 
+    centromere_list(redFound.PixelIdxList{centromere_deviants(i)}) = 1;
+end
+figure,imshow(centromere_list),title('Potential Aberrants, Centromere')
+
 %% User Input?
-all_deviants = unique(horzcat(area_deviants, corner_deviants)); % collects aberrants
+all_deviants = unique(horzcat(area_deviants, corner_deviants,centromere_deviants)); % collects aberrants
 
 aberrants = logical(a); % creates blank logical matrix
 for i = 1:length(all_deviants) % cycles thru known aberrants
@@ -377,8 +395,9 @@ end
 pause(2)
 close(gcf)
 %% Measurements?
-measures = zeros(1, redFound.NumObjects);
 outlines = cell(1, redFound.NumObjects);
+image_data = struct('Chromosome_Length', {zeros(redFound.NumObjects,1)},...
+    'Foci_Distances', {[]});
 for i = 1:redFound.NumObjects % isolates each chromosome found
     blank = logical(a); % creates blank logical matrix
     blank(redFound.PixelIdxList{i}) = 1; % assigns all the listed pixels to 1
@@ -393,16 +412,16 @@ for i = 1:redFound.NumObjects % isolates each chromosome found
     outlines(i) = {double(perim)}; % save outline for later use
     
     perimSum = sum(sum(perim))/2;
-    measures(i) = perimSum;
+    image_data.Chromosome_Length(i) = perimSum;
 end
-
 %% Dijkstra's Approach to automated measuring of inter-foci distance
 
-%create a map
-overall = overlay;
-overall(overall ~= 0) = 0;
+% create a map to pass Dijkstra's method
+overall = overlay; % copies the type of variable
+overall(:) = 0; % clears it out
 for i = 1:redFound.NumObjects
     if(sum(true_aberrants == i)) % will skip any aberrants
+        image_data.Foci_Distances{i} = [];
         continue
     end
     
@@ -436,18 +455,20 @@ for i = 1:redFound.NumObjects
     %     overall = insertShape(overall,'circle',[foci(:,1),foci(:,2),repmat(6,size(foci,1),1)], 'color', 'green'); % DELETE
     %     imshow(overall)
     
-    [distance, path] = dijkstra_image(map, centromere, foci(1,:));
-    
+    [distance, path] = dijkstra_image(map, centromere, foci);
+    image_data.Foci_Distances{i} = distance;
+end
+if(size(image_data.Foci_Distances, 1) == 1)
+    image_data.Foci_Distances = image_data.Foci_Distances'; % makes data organization consistent
 end
 
+return
 % body = double(body);
 % body(path) = 0;
 % body = imcomplement(body);
 % body = insertShape(body,'circle',[foci(:,1),foci(:,2),repmat(3,size(foci,1),1)], 'color', 'green'); % DELETE
 % body = insertShape(body,'circle',[centromere(1),centromere(2),3], 'color', 'blue'); % DELETE
 % imshow(body) % DELETE
-% TODO: write code to do interfocal distances, and make sure all data is
-% stored
 %% Spline Measuring
 for i = 1:length(true_aberrants)
     blank = logical(a); % creates blank logical matrix
