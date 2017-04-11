@@ -10,7 +10,7 @@ assert(length(source) == 2 && size(source,1) == 1)
 get_weight = @(c) map(c(1),c(2));
 find_neighbors = @(x,y) [x-1,y-1;x-1,y;x-1,y+1;x,y-1;x,y+1;x+1,y+1;x+1,y;x+1,y-1];
 nodes = find(map); % linear indices of all nodes
-node = @(location) ismember(nodes, location,'rows'); % uses node linear index to find position in nodes
+node = @(location) find(nodes == location); % uses node linear index to find position in nodes
 coord2lin = @(x) sub2ind(size(map), x(1), x(2));
 
 % change given coordinates into 'proper' format (linear index)

@@ -2,7 +2,7 @@
 % location = input('Supply (in single quotes) the filepath to image folder');
 % img = imread(location);
 close all
-location = '~/Desktop/College/Research/PayseurLab/male.tif'; % DELETE
+location = '~/Desktop/College/Research/PayseurLab/female.tif'; % DELETE
 img = imread(location);
 % % Creates list of all .tif files in the directory provided
 % files = dir(strcat(location,'/*.tif')); %finds all matching files
@@ -33,7 +33,7 @@ just_green = cat(3, a, green, a);
 just_blue = cat(3, a, a, blue);
 
 images = [img, just_red; just_green, just_blue];
-montage(images,'Size', [1 1]), title('Raw Color Channels');
+% montage(images,'Size', [1 1]), title('Raw Color Channels');
 
 
 %% Detection of Red
@@ -98,8 +98,8 @@ while numFound ~= 20
     end
 end
 
-figure, imshowpair(img, label2rgb(labelmatrix(redFound)), 'montage')
-title(strcat(['Binarized Red Channel, Chromosomes identified = ', num2str(numFound)]))
+% figure, imshowpair(img, label2rgb(labelmatrix(redFound)), 'montage')
+% title(strcat(['Binarized Red Channel, Chromosomes identified = ', num2str(numFound)]))
 
 %% Detection of blue
 % females have (19 autosomal + 1 sex) centromeres == 20
@@ -161,9 +161,9 @@ while numFound ~= numOfCentromeres
     end
 end
 
-figure, imshowpair(img, label2rgb(labelmatrix(blueFound)), 'montage')
-title(strcat(['Binarized Blue Channel, Centromeres identified = ', ...
-    num2str(numFound), ', threshold = ', num2str(threshold)]))
+% figure, imshowpair(img, label2rgb(labelmatrix(blueFound)), 'montage')
+% title(strcat(['Binarized Blue Channel, Centromeres identified = ', ...
+%     num2str(numFound), ', threshold = ', num2str(threshold)]))
 
 %% Detection of green
 % binarize image with best threshold
@@ -196,8 +196,8 @@ bwG = bwareaopen((bwR & bw), 8);
 greenFound = bwconncomp(bwG, 8);
 numFound = greenFound.NumObjects;
 
-figure, imshowpair(img, bwG, 'montage'),
-title(strcat(['Binarized Green Channel, Foci identified = ', num2str(numFound)]))
+% figure, imshowpair(img, bwG, 'montage'),
+% title(strcat(['Binarized Green Channel, Foci identified = ', num2str(numFound)]))
 
 %% Review the New Composite
 % Simplify the image by only green and blue areas that overlap red
@@ -251,13 +251,13 @@ for i = 1:length(corner_deviants) %cycles thru aberrants
     corners_list(redFound.PixelIdxList{corner_deviants(i)}) = 1;
 end
 
-figure, imshow(corners_list),title('Potential Aberrants, Corners')
+% figure, imshow(corners_list),title('Potential Aberrants, Corners')
 %% Aberrant Detection - Area Method
 % create graph showing distribution
-figure, bar(sort(areas));
-refline(0,median(areas) - (1 - 0.075*missing)*iqr(areas)) %less sensitive
-refline(0,median(areas))
-refline(0,median(areas) + 0.75*iqr(areas))
+% figure, bar(sort(areas));
+% refline(0,median(areas) - (1 - 0.075*missing)*iqr(areas)) %less sensitive
+% refline(0,median(areas))
+% refline(0,median(areas) + 0.75*iqr(areas))
 
 cutoffLow = median(areas) - (1 - 0.075*missing)*iqr(areas); %less sensitive
 cutoffHigh = median(areas) + 0.75*iqr(areas);
@@ -268,7 +268,7 @@ for i = 1:length(area_deviants) %cycles thru aberrants
     area_list(redFound.PixelIdxList{area_deviants(i)}) = 1;
 end
 
-figure, imshow(area_list),title('Potential Aberrants, Area')
+% figure, imshow(area_list),title('Potential Aberrants, Area')
 %% Aberrant Detection - Centromere method
 centromere_deviants = zeros(1,redFound.NumObjects);
 for i = 1:redFound.NumObjects
@@ -287,7 +287,7 @@ centromere_list = logical(a);
 for i = 1:length(centromere_deviants) 
     centromere_list(redFound.PixelIdxList{centromere_deviants(i)}) = 1;
 end
-figure,imshow(centromere_list),title('Potential Aberrants, Centromere')
+% figure,imshow(centromere_list),title('Potential Aberrants, Centromere')
 
 %% User Input?
 all_deviants = unique(horzcat(area_deviants, corner_deviants,centromere_deviants)); % collects aberrants
@@ -392,7 +392,7 @@ if(exist('true_aberrants','var'))
 else
     true_aberrants = 0; % initialize
 end
-pause(2)
+pause(1)
 close(gcf)
 %% Measurements?
 outlines = cell(1, redFound.NumObjects);
