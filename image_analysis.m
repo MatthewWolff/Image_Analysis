@@ -94,10 +94,10 @@ while numFound ~= 20
     % if dilation fixed anything, uses the adjusted image
     if(adjusted.NumObjects ~= redFound.NumObjects)
         redFound = adjusted;
-        fprintf('dilation used')
+        warning('dilation used')
     end
 end
-
+% 
 % figure, imshowpair(img, label2rgb(labelmatrix(redFound)), 'montage')
 % title(strcat(['Binarized Red Channel, Chromosomes identified = ', num2str(numFound)]))
 
@@ -117,7 +117,7 @@ threshold = graythresh(blue);
 bckgrndReduct = 15; % to be adjusted
 adjustCount = 0;
 adjustLimit = 2000; % to catch infinite loops -> normal is < 100
-
+blueFlag = false;
 while numFound ~= numOfCentromeres
     % Prepare Image for counting
     bw = imbinarize(blue, threshold); % binarizes with best threshold
@@ -127,6 +127,7 @@ while numFound ~= numOfCentromeres
     if(adjustCount == 0 && percentOfImg > 0.2)
         warning('special case thresholding: blue')
         threshold = 0.7;
+        blueFlag = true;
         continue
     end
     
@@ -147,7 +148,11 @@ while numFound ~= numOfCentromeres
         adjustCount = adjustCount + 1;
     elseif threshold >= 0.995 %  max threshold used - adjust bckgrnd reduct.
         bckgrndReduct = bckgrndReduct + 1;
-        threshold = graythresh(blue); %reset
+        if(blueFlag)
+            threshold = 0.7;
+        else
+            threshold = graythresh(blue); %reset
+        end
     end
     
     if bckgrndReduct > 30
@@ -160,7 +165,7 @@ while numFound ~= numOfCentromeres
         break
     end
 end
-
+%
 % figure, imshowpair(img, label2rgb(labelmatrix(blueFound)), 'montage')
 % title(strcat(['Binarized Blue Channel, Centromeres identified = ', ...
 %     num2str(numFound), ', threshold = ', num2str(threshold)]))
@@ -176,26 +181,40 @@ if(percent_SC_covered > 0.3)
     bw = imbinarize(green, 0.175); % arbitrary threshold
 end
 
-%reduce background noise
-bw = bwareaopen(bw, 4);
-
-% find foci
-[~, threshold] = edge(bw, 'sobel');
-bw = edge(bw,'sobel', threshold * fudgeFactor);
-
-% enlarge
-seBegin = strel('line', 2, 90);
-seEnd = strel('line', 2, 0);
-lines = imdilate(bw, [seBegin seEnd]);
-bw = imfill(lines, 'holes');
-
-% prune away foci that don't overlap red
-bwG = bwareaopen((bwR & bw), 8);
-
-% attempt to count number of foci
-greenFound = bwconncomp(bwG, 8);
-numFound = greenFound.NumObjects;
-
+% Special case: There's so much noise around the cell that we're finding
+% too many foci
+numFound = 100;
+greenthresh = 0.25;
+while(numFound > 40 && greenthresh < 1)
+    
+    % TODO: Implement foci number check
+    
+    %reduce background noise
+    bw = bwareaopen(bw, 4);
+    
+    % find foci
+    [~, threshold] = edge(bw, 'sobel');
+    bw = edge(bw,'sobel', threshold * fudgeFactor);
+    
+    % enlarge
+    seBegin = strel('line', 2, 90);
+    seEnd = strel('line', 2, 0);
+    lines = imdilate(bw, [seBegin seEnd]);
+    bw = imfill(lines, 'holes');
+    
+    % prune away foci that don't overlap red
+    bwG = bwareaopen((bwR & bw), 8);
+    
+    % attempt to count number of foci
+    greenFound = bwconncomp(bwG, 8);
+    numFound = greenFound.NumObjects;
+    
+    if(numFound > 40)
+        bw = imbinarize(green, greenthresh);
+        greenthresh = greenthresh + 0.05;
+    end
+    
+end
 % figure, imshowpair(img, bwG, 'montage'),
 % title(strcat(['Binarized Green Channel, Foci identified = ', num2str(numFound)]))
 
@@ -277,14 +296,14 @@ for i = 1:redFound.NumObjects
     centromeres = bwconncomp(bwB & blank, 8); % plots only the overlap
     
     %evaluate if aberrant
-    if(centromeres.NumObjects ~= 1) 
+    if(centromeres.NumObjects ~= 1)
         centromere_deviants(i) = i;
     end
 end
 centromere_deviants = find(centromere_deviants ~= 0); % clean out zeros
 
 centromere_list = logical(a);
-for i = 1:length(centromere_deviants) 
+for i = 1:length(centromere_deviants)
     centromere_list(redFound.PixelIdxList{centromere_deviants(i)}) = 1;
 end
 % figure,imshow(centromere_list),title('Potential Aberrants, Centromere')
@@ -430,7 +449,7 @@ for i = 1:redFound.NumObjects
     map = 2*double(body); % begins map creation
     skeleton = double(bwmorph(map,'skel',Inf)); % saves skeletal chromosome
     
-    map = map + 2*outlines{i}; % makes the perimeter higher cost
+    map(outlines{i} ~= 0) = 3; % makes the perimeter higher cost
     map(skeleton == 1) = 1; % makes the skeletal path the lowest cost
     
     % display - DELETE
@@ -495,17 +514,11 @@ for i = 1:length(true_aberrants)
     end
     display(distance)
 end
-% TODO: store distances
 %using splines to measure aberrants
 %evaluate two objects of same length, diagonal and horizontal
 
 %% TODO
-%
-%   - Detect intersections and overlap between chromosomes
-%       - aberrant detection for number of centromeres per PixelxIDList blob
-%       - use the area to decide if the threshold for blue channel needs to be bumped
-%       - make the above work WITH the blue channel's new overlay
-%         reduction
+%   - ACTUALLY DEAL WITH THE ABERRANTS LOL
 %
 %   - evaluate the percent error of the diagonal vs horizontal issue by
 %       using snipped yarn on solid black background
