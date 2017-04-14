@@ -2,7 +2,9 @@
 % location = input('Supply (in single quotes) the filepath to image folder');
 % img = imread(location);
 close all
-location = '~/Desktop/College/Research/PayseurLab/female.tif'; % DELETE
+%location = '~/Desktop/College/Research/PayseurLab/female.tif'; % DELETE
+location = 'C:\Users\alpeterson7\Documents\matt wolf\WSB1 (1).tif';
+
 img = imread(location);
 % % Creates list of all .tif files in the directory provided
 % files = dir(strcat(location,'/*.tif')); %finds all matching files
@@ -517,6 +519,32 @@ end
 %using splines to measure aberrants
 %evaluate two objects of same length, diagonal and horizontal
 
+
+%% Writing image_data to a file
+% convert image data to a table, write the table to a file
+
+% create array of all the values
+Biv_ID = {};
+SplineLength = [];%do these arrays have to be set to a certain size? no...?
+FociDistances = [];
+
+for i = 1:redFound.NumObjects
+%add values to arrays
+%loop through each biv and etract spline length and foci position
+    %fprintf('on ',char(i) )
+   % Biv_ID(i) = i;
+    cellstr
+    celldata = cellstr(image_data.Chromosome_Length)  %double
+    SplineLength(i) = image_data.Chromosome_Length(i);% paren ( ) for values
+    %FociDistances(i) = image_data.Foci_Distances{i}; %{ } array
+
+end
+
+%write the table filled with array values to file
+T = table(SplineLength, 'RowNames' );%Biv_ID, FociDistances, 
+writetable(T,'spline_data.txt');
+
+%%%
 %% TODO
 %   - ACTUALLY DEAL WITH THE ABERRANTS LOL
 %
