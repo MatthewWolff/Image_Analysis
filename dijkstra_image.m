@@ -78,34 +78,3 @@ end
 dist = distance(ismember(nodes, terminal,'rows'));
 
 end
-
-%% Dijkstra's Method using a Priority Queue (faster, but unsupported)
-% MATLAB allows you to call Java code but not all the parts that I need...
-% NEED: to supply a comparator so that the priority queue can order itself
-% pq = java.util.PriorityQueue;
-% pq.add({0,origin});
-% distance(node(origin)) = 0; % the distance to each node of the node list
-% 
-% 
-% while(~pq.isEmpty())
-%     head = pq.poll();
-%     current = head(2);
-%     
-%     [x,y] = ind2sub(size(map,1), current); %convert index to coords for neighbor finding
-%     neighbors = find_neighbors(x,y);
-%     neighbors = neighbors(neighbors(:,1) > 0 & neighbors(:,2) > 0, :); %remove impossible neighbors
-%     
-%     for j = 1 : length(neighbors)    % look thru neighbors
-%         n = neighbors(j,:); % this iteration's neighbor
-%         local_dist = distance(node(current)) + get_weight(n);%distance from point to neighbor == neighbor value
-%         display(distance(node(coord2lin(n))) > local_dist)
-%         if (distance(node(coord2lin(n))) > local_dist)
-%             distance(node(coord2lin(n))) = local_dist;
-%             pq.add({distance(node(coord2lin(n))),coord2lin(n)});
-%         end
-%     end
-% end
-% fprintf('Vertex   Distance from Source\n');
-% for i = 1:length(nodes)
-%     fprintf('%d \t\t %d\n', i, distance(i));
-% end

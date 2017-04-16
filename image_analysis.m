@@ -2,7 +2,7 @@
 % location = input('Supply (in single quotes) the filepath to image folder');
 % img = imread(location);
 close all
-location = '~/Desktop/College/Research/PayseurLab/female.tif'; % DELETE
+location = '~/Desktop/College/Research/PayseurLab/male.tif'; % DELETE
 img = imread(location);
 % % Creates list of all .tif files in the directory provided
 % files = dir(strcat(location,'/*.tif')); %finds all matching files
@@ -20,7 +20,6 @@ flag = false; % DELETE - to mark when a bad image has been given
 [~,name,~] = fileparts(location);
 isFemale = regexp(name,'female');
 isMale = isempty(isFemale);
-
 
 % Split Channels -
 %https://www.mathworks.com/matlabcentral/answers/91036-split-an-color-image-to-its-3-rgb-channels
@@ -97,7 +96,7 @@ while numFound ~= 20
         warning('dilation used')
     end
 end
-% 
+%
 % figure, imshowpair(img, label2rgb(labelmatrix(redFound)), 'montage')
 % title(strcat(['Binarized Red Channel, Chromosomes identified = ', num2str(numFound)]))
 
@@ -385,7 +384,7 @@ while(~done)
                 end
             end
             
-            % Only keep track of user input that doesn't find a match
+            % Only keeps track of user input that doesn't find a match
             toRemove = find(ismember(user_input, match,'rows'));
             if(~isempty(toRemove)) % in case user clicks on same chromosome twice
                 user_input(toRemove, :) = [];
@@ -404,22 +403,242 @@ while(~done)
     end
 end
 
-
+true_aberrants = true_aberrants'; % makes into a vertical vector
 hold on, imshow(aberrants), hold off % show on same plot
 if(exist('true_aberrants','var'))
     fprintf('you have selected chromosome %i\n', true_aberrants);
 else
-    true_aberrants = 0; % initialize
+    true_aberrants = -1; % initialize
 end
 pause(1)
 close(gcf)
-%% Measurements?
-outlines = cell(1, redFound.NumObjects);
-image_data = struct('Chromosome_Length', {zeros(redFound.NumObjects,1)},...
+%% Aberrant Classification
+% create true list
+chromosomes = struct('PixelIdxList', {redFound.PixelIdxList},'NumObjects', redFound.NumObjects);
+found_fragments = []; % keep track of which chromosomes are fragments
+redraw = []; % keep track of which need to be redrawn
+if(true_aberrants ~= -1) % skip if there aren't aberrants
+    figure % creates new window to use
+    for i = 1:length(true_aberrants)
+        
+        if(sum(found_fragments(found_fragments == true_aberrants(i)))) % skips found fragments
+            continue
+        end
+        
+        blank = logical(a); % creates blank logical matrix
+        blank(redFound.PixelIdxList{true_aberrants(i)}) = 1; % assigns all the listed pixels to 1
+        imshowpair(blank,bwR), title('Aberrant Designation')
+        
+        figh = gcf;
+        if(i == 1), pos = get(figh,'position'); end
+        set(figh,'position',[pos(1:2)*0.75 pos(3:4)*3]);
+        
+        if(i == 1) % show instructions, and if male, tell them to designate the XY
+            pause(1)
+            prompt = {'This box can be left open.';'';...
+                'If the aberrant should be deleted, type "delete" or 0';...
+                'If the aberrant simply needs to be redrawn, type 1';...
+                'If there are multiple chromosomes, type the number (2 to 6)';...
+                'If the aberrant is part of a fragmented chromosome, type "b"'};
+            if(isMale)
+                prompt{7} = 'If the aberrant is the XY chromosome, type "xy"';
+            end
+            msgbox(prompt)
+        end
+        
+        designation = inputdlg('Please select a designation for the aberrant (marked in white)');
+        
+        switch designation{1}
+            case 'delete' % delete key - deletes entry
+                chromosomes.PixelIdxList{true_aberrants(i)} = [];
+                chromosomes.NumObjects = chromosomes.NumObjects - 1;
+            case '0' % 0.. same as delete
+                chromosomes.PixelIdxList{true_aberrants(i)} = [];
+                chromosomes.NumObjects = chromosomes.NumObjects - 1;
+            case '1' % 1
+                chromosomes.PixelIdxList{true_aberrants(i)} = [];
+                redraw = [redraw,true_aberrants(i)];
+                continue
+            case '2' % 2
+                chromosomes.PixelIdxList{true_aberrants(i)} = [];
+                chromosomes.NumObjects = chromosomes.NumObjects + 1;
+                for r = 1:2, redraw = [redraw,true_aberrants(i)]; end
+            case '3' % 3
+                chromosomes.PixelIdxList{true_aberrants(i)} = [];
+                chromosomes.NumObjects = chromosomes.NumObjects + 2;
+                for r = 1:3, redraw = [redraw,true_aberrants(i)]; end
+            case '4' % 4
+                chromosomes.PixelIdxList{true_aberrants(i)} = [];
+                chromosomes.NumObjects = chromosomes.NumObjects + 3;
+                for r = 1:4, redraw = [redraw,true_aberrants(i)]; end
+            case '5' % 5
+                chromosomes.PixelIdxList{true_aberrants(i)} = [];
+                chromosomes.NumObjects = chromosomes.NumObjects + 4;
+                for r = 1:5, redraw = [redraw,true_aberrants(i)]; end
+            case '6' % 6
+                chromosomes.PixelIdxList{true_aberrants(i)} = [];
+                chromosomes.NumObjects = chromosomes.NumObjects + 5;
+                for r = 1:6, redraw = [redraw,true_aberrants(i)]; end
+            case 'xy' % x - xy chromosome
+                chromosomes.PixelIdxList{true_aberrants(i)} = [];
+                chromosomes.NumObjects = chromosomes.NumObjects - 1;
+            case 'b' % b - broken chromosome
+                aberrants = logical(a); % creates blank logical matrix
+                for j = 1:length(all_deviants) % cycles thru known aberrants
+                    aberrants(redFound.PixelIdxList{all_deviants(j)}) = 1; % marks them on plot
+                end
+                
+                aberrants = imcomplement(aberrants); % flips colors so easier to use cross-hair
+                refresh = aberrants;
+                
+                done = false; % sentinel value for completion
+                while(~done)
+                    
+                    aberrants = refresh; % makes sure the user receives a fresh image
+                    
+                    % customizes display
+                    beep
+                    figure, imshow(aberrants), title('Please click all fragments of the chromosome in question')
+                    myFig = gcf;
+                    pos = get(myFig,'position');
+                    set(myFig,'position',[pos(1:2)*0.5 pos(3:4)*3]);
+                    
+                    % receive user input
+                    [x,y, buttons] = ginput;
+                    user_input = uint64([x,y]); % cast this because it needs to be an integer
+                    
+                    % if the user hits the delete key
+                    if(sum(ismember(buttons, 8)))
+                        toRemove = find(buttons == 8) - 1; % remove the click before
+                        
+                        if(~sum(ismember(toRemove, 0))) % checks for delete key as first press
+                            user_input(toRemove,:) = 0; % marks the bad click
+                            user_input(toRemove + 1,:) = 0; % marks the delete-key press
+                            user_input(ismember(user_input, [0,0],'rows'),:) = []; % deletes
+                            % corrects coordinates too
+                            x = user_input(:,1);
+                            y = user_input(:,2);
+                        else
+                            uiwait(msgbox('Delete-key pressed too early.','Warning','modal'));
+                            close(gcf)
+                            continue
+                        end
+                    end
+                    
+                    % Create circles where the user clicks
+                    if(size(user_input,1) > 1)
+                        for j = 1:length(user_input) % marks user input
+                            aberrants = insertShape(double(aberrants),'circle',[x((j)),y(j),3], 'color', 'red');
+                        end
+                    elseif size(user_input,1) == 1
+                        aberrants = insertShape(double(aberrants),'circle',[x,y,3], 'color', 'red');
+                    elseif size(user_input,1) == 0
+                        break % user didn't want to mark any aberrants
+                    end
+                    
+                    % See which options the user clicked on
+                    fragments = zeros(1,redFound.NumObjects); % pre-allocate array for matches
+                    for j = 1:length(all_deviants) % see what objects the user clicked on
+                        
+                        [y,x] = ind2sub(size(a),redFound.PixelIdxList{all_deviants(j)}); % somehow this returns y then x....
+                        coords = [x,y];
+                        
+                        match = intersect(user_input,coords,'rows'); % do any coordinates on this silhouette match user input?
+                        if ~isempty(match)
+                            fragments(j) = all_deviants(j); % adds confirmed aberrant to list
+                            aberrants = insertShape(double(aberrants),'circle',[match(1,1),match(1,2),3],...
+                                'color', 'green','LineWidth', 2); % confirms it on picture
+                            
+                            if(size(match,1) > 1) % if user clicked same chromosome multiple times, turns those green
+                                for k = 2:(size(match,1))
+                                    aberrants = insertShape(double(aberrants),'circle',[match(k,1),match(k,2),3],...
+                                        'color', 'green','LineWidth', 2); % confirms it on picture
+                                end
+                            end
+                            
+                            % Only keeps track of user input that doesn't find a match
+                            toRemove = find(ismember(user_input, match,'rows'));
+                            if(~isempty(toRemove)) % in case user clicks on same chromosome twice
+                                user_input(toRemove, :) = [];
+                            end
+                        end
+                    end
+                    fragments(fragments == 0) = []; % remove all 0's
+                    hold on, imshow(aberrants), hold off % show the user's clicks
+                    
+                    % invalid clicks are not allowed, restart if there are any
+                    if(~isempty(user_input))
+                        uiwait(msgbox('Not all user input points were found.','Warning','modal'));
+                        close(gcf)
+                    else
+                        done = true;
+                    end
+                end
+                
+                hold on, imshow(aberrants), hold off
+                pause(1)
+                close(gcf)
+                
+                chromosomes.NumObjects = chromosomes.NumObjects - (length(fragments)-1);
+                for j = 1:length(fragments) % remove all fragments from list
+                    chromosomes.PixelIdxList{fragments(j)} = [];
+                end
+                found_fragments = unique([found_fragments, fragments]);
+                redraw = [redraw,true_aberrants(i)];
+        end
+    end
+    close(gcf)
+end
+% clean up list
+chromosomes.PixelIdxList = chromosomes.PixelIdxList(~cellfun('isempty',chromosomes.PixelIdxList))';
+%% Spline Measuring
+% creates storage structure for data
+image_data = struct('Chromosome_Length', {zeros(chromosomes.NumObjects,1)},...
     'Foci_Distances', {[]});
-for i = 1:redFound.NumObjects % isolates each chromosome found
+return; %DELETE
+for i = 1:length(redraw)
     blank = logical(a); % creates blank logical matrix
-    blank(redFound.PixelIdxList{i}) = 1; % assigns all the listed pixels to 1
+    pixel = double(a); % the canvas to create the new chromosome on
+    
+    if(sum(found_fragments == redraw(i))) % if the redraw is a fragment, show all fragments
+        for j = 1:length(found_fragments)
+            blank(redFound.PixelIdxList{found_fragments(j)}) = 1;
+        end
+    else
+        blank(redFound.PixelIdxList{redraw(i)}) = 1; % assigns all the listed pixels to 1
+    end
+    
+    blank = imcomplement(blank);
+    imshow(blank)
+    
+    figh = gcf;
+    if(i == 1), pos = get(figh,'position'); end
+    set(figh,'position',[pos(1:2)*0.75 pos(3:4)*3]);
+    
+    % splining
+    [y,x] = ginput;
+    coord = [x,y];
+    distance = 0;
+    for j = 2:size(coord,1)
+        distance = distance + pdist([coord(j-1,:);coord(j,:)], 'euclidean');
+    end
+    
+    % TODO: create a pixelIdxList body for each chromosome
+    
+%     pixel = insertShape(double(pixel),'circle',[X(1,:), X(2,:),3],...
+    %                 'color', 'green','LineWidth', 2)
+end
+close(gcf)
+% using splines to measure aberrants:
+% evaluate two objects of same length, diagonal and horizontal
+%% Measurements?
+outlines = cell(1, chromosomes.NumObjects);
+for i = 1:chromosomes.NumObjects % isolates each chromosome found
+    
+    % TODO: make sure that splined chromosomes aren't measured this way
+    
+    blank = logical(a); % creates blank logical matrix
+    blank(chromosomes.PixelIdxList{i}) = 1; % assigns all the listed pixels to 1
     
     % use perimeter function to get estimate
     measure = regionprops(blank, 'perimeter');
@@ -431,21 +650,19 @@ for i = 1:redFound.NumObjects % isolates each chromosome found
     outlines(i) = {double(perim)}; % save outline for later use
     
     perimSum = sum(sum(perim))/2;
-    image_data.Chromosome_Length(i) = perimSum;
+    image_data.Chromosome_Length(i) = perimSum - 5;
+    % subtracting five is chosen arbitrarily as a correction for the slight
+    % curve towards the tip of a chromosome
 end
 %% Dijkstra's Approach to automated measuring of inter-foci distance
 
 % create a map to pass Dijkstra's method
-overall = overlay; % copies the type of variable
+overall = overlay; % copies the type from a pre-existing variable
 overall(:) = 0; % clears it out
-for i = 1:redFound.NumObjects
-    if(sum(true_aberrants == i)) % will skip any aberrants
-        image_data.Foci_Distances{i} = [];
-        continue
-    end
+for i = 1:chromosomes.NumObjects
     
     body = logical(a); % blank map of 0's
-    body(redFound.PixelIdxList{i}) = 1; % body of chromosome
+    body(chromosomes.PixelIdxList{i}) = 1; % body of chromosome
     map = 2*double(body); % begins map creation
     skeleton = double(bwmorph(map,'skel',Inf)); % saves skeletal chromosome
     
@@ -453,7 +670,7 @@ for i = 1:redFound.NumObjects
     map(skeleton == 1) = 1; % makes the skeletal path the lowest cost
     
     % display - DELETE
-    blank = logical(a); blank(redFound.PixelIdxList{i}) = 1;
+    blank = logical(a); blank(chromosomes.PixelIdxList{i}) = 1;
     overall = overall + cat(3, blank, logical(skeleton), logical(outlines{i}));
     imshowpair(img, overall, 'montage'); hold on
     
@@ -476,46 +693,12 @@ for i = 1:redFound.NumObjects
     
     [distance, path] = dijkstra_image(map, centromere, foci);
     image_data.Foci_Distances{i} = distance;
+    hold off
 end
+
 if(size(image_data.Foci_Distances, 1) == 1)
     image_data.Foci_Distances = image_data.Foci_Distances'; % makes data organization consistent
 end
-
-return
-% body = double(body);
-% body(path) = 0;
-% body = imcomplement(body);
-% body = insertShape(body,'circle',[foci(:,1),foci(:,2),repmat(3,size(foci,1),1)], 'color', 'green'); % DELETE
-% body = insertShape(body,'circle',[centromere(1),centromere(2),3], 'color', 'blue'); % DELETE
-% imshow(body) % DELETE
-%% Spline Measuring
-for i = 1:length(true_aberrants)
-    blank = logical(a); % creates blank logical matrix
-    blank(redFound.PixelIdxList{true_aberrants(i)}) = 1; % assigns all the listed pixels to 1
-    
-    % Crop and center
-    cropped = regionprops(blank, 'image'); % tight crop
-    cropped = cropped.Image;
-    cropped = imtranslate(cropped,[20, 20],'OutputView','full'); % expands
-    cropped = imtranslate(cropped, [-10,-10]); % centers
-    cropped = imcomplement(cropped);
-    imshow(cropped)
-    
-    figh = gcf;
-    pos = get(figh,'position');
-    set(figh,'position',[pos(1:2)*0.5 pos(3:4)*3]);
-    
-    % splining
-    [x,y] = ginput;
-    X = [x,y];
-    for j = 2:size(X,1)
-        if j == 2, distance = 0; end
-        distance = distance + pdist([X(j-1,:);X(j,:)], 'euclidean');
-    end
-    display(distance)
-end
-%using splines to measure aberrants
-%evaluate two objects of same length, diagonal and horizontal
 
 %% TODO
 %   - ACTUALLY DEAL WITH THE ABERRANTS LOL
@@ -543,3 +726,4 @@ end
 %          - XY, Aberrant, Accept, Delete?
 %                 -Aberrant -> Overlap, touching, disconnected, unfilled in
 %                     -when drawing overlap, allow to designate as XY
+%
