@@ -2,7 +2,7 @@
 % location = input('Supply (in single quotes) the filepath to image folder');
 % img = imread(location);
 close all
-location = '~/Desktop/College/Research/PayseurLab/male.tif'; % DELETE
+location = '~/Desktop/College/Research/PayseurLab/male3.tif'; % DELETE
 img = imread(location);
 % % Creates list of all .tif files in the directory provided
 % files = dir(strcat(location,'/*.tif')); %finds all matching files
@@ -245,16 +245,17 @@ for i = 1:redFound.NumObjects % isolates each chromosome found
     
     % Detect Corners
     minEigen = 0.4275; % default...
-    missing = 0;
+    missing = (20 - redFound.NumObjects);
+    missing_adjustment = 0;
     if redFound.NumObjects < 20 && redFound.NumObjects >= 12 % be more sensitive if missing any
-        missing = 0.03*(20 - redFound.NumObjects);
+        missing_adjustment = abs(0.03*missing);
     elseif redFound.NumObjects < 12 % can't let minEigen go too low
         minEigen = 0.1;
     end
     
     % Corner detection should become progressively more sensitive the more
     % missing chromosomes there are.
-    corners = detectMinEigenFeatures(smooth, 'minQuality', minEigen - missing);
+    corners = detectMinEigenFeatures(smooth, 'minQuality', minEigen - missing_adjustment);
     
     numCorners(i) = corners.length(); % 5 seems like a good cut off
     areas(i) = size(redFound.PixelIdxList{i}, 1); % for next step
@@ -293,9 +294,106 @@ for i = 1:redFound.NumObjects
     centromeres = bwconncomp(bwB & blank, 8); % plots only the overlap
     
     %evaluate if aberrant
-    if(centromeres.NumObjects ~= 1)
+    if(centromeres.NumObjects == 1)
+        continue;
+    elseif(centromeres.NumObjects > 1)
         centromere_deviants(i) = i;
     end
+    
+    blank = imcomplement(blank); % flips colors so easier to use cross-hair
+    refresh = blank;
+    
+    beep
+    blue_red = cat(3,red,a,blue);
+    figure,imshowpair(blank, blue_red,'montage')
+    if centromeres.NumObjects == 0
+        title('A chromosome with 0 centromeres has been detected! Click on the image where the centromere should go.')
+    else
+        title('A chromosome with multiple centromeres has been detected! Hit Enter to ignore.')
+    end
+    myFig = gcf;
+    pos = get(myFig,'position');
+    set(myFig,'position',[pos(1:2)*0.5 pos(3:4)*2]);
+    done = false; % sentinel value for completion
+    while(~done)
+        
+        blank = refresh; % makes sure the user receives a fresh image
+        
+        hold on,imshowpair(blank, blue_red,'montage')
+        if centromeres.NumObjects == 0
+            title('A chromosome with 0 centromeres has been detected! Click on the image where the centromere should go.')
+        else
+            title('A chromosome with multiple centromeres has been detected! Hit Enter to ignore.')
+        end
+        myFig = gcf;
+        set(myFig,'position',[pos(1:2)*0.5 pos(3:4)*2]);
+        % customizes display
+        
+        % receive user input
+        [x,y] = ginput(1);
+        user_input = uint32([x,y]); % divide by two bc paired image
+        
+        % Create circles where the user clicks
+        if (size(user_input,1) == 1)
+            blank = insertShape(double(blank),'circle',[x,y,3], 'color', 'red');
+            imshowpair(blank, blue_red,'montage')
+        elseif size(user_input,1) == 0
+            centromere_deviants(i) = i;
+            break % user didn't want to mark any aberrants
+        end
+        
+        [y,x] = ind2sub(size(a),redFound.PixelIdxList{i}); % somehow this returns y then x....
+        coords = [x,y];
+        
+        match = intersect(user_input,coords,'rows'); % do any coordinates on this silhouette match user input?
+        if ~isempty(match)
+            
+            blank = insertShape(double(blank),'circle',[match(1,1),match(1,2),3],...
+                'color', 'green','LineWidth', 2); % confirms it on picture
+        end
+        
+        % Only keeps track of user input that doesn't find a match
+        toRemove = find(ismember(user_input, match,'rows'));
+        if(~isempty(toRemove)) % in case user clicks on same chromosome twice
+            user_input(toRemove, :) = [];
+        end
+        
+        hold on, imshowpair(blank, blue_red,'montage'), hold off % show the user's clicks
+        
+        % invalid clicks are not allowed, restart if there are any
+        if(~isempty(user_input))
+            uiwait(msgbox('Not all user input points were found.','Warning','modal'));
+        else
+            done = true;
+        end
+        
+        % create the centromere
+        new_centromere = logical(a);
+        x = match(2); y = match(1);
+        point = [x-1,y-1;x-1,y;x-1,y+1;x,y-1;x,y+1;x+1,y+1;x+1,y;x+1,y-1];
+        center = sub2ind(size(new_centromere), point(:,1),point(:,2));
+        new_centromere(center) = 1;
+        
+        for iterations = 1:7 % grow the centromere
+            % prepare to dilate
+            [~, threshold] = edge(new_centromere, 'sobel');
+            new_centromere = edge(new_centromere,'sobel', threshold * fudgeFactor);
+            
+            % dilate and fill the drawn line
+            seBegin = strel('line', 2, 100);
+            seEnd = strel('line', 2, -1);
+            center = imdilate(new_centromere, [seBegin seEnd]);
+            new_centromere = imfill(center, 'holes');
+        end
+        new_centromere = find(new_centromere); % store linear coordinates
+        bwB(new_centromere) = 1;
+        bwB = bwB & bwR; % clean up
+    end
+    
+    hold on, imshowpair(blank, blue_red,'montage'), hold off
+    pause(1)
+    close(gcf)
+    
 end
 centromere_deviants = find(centromere_deviants ~= 0); % clean out zeros
 
@@ -401,11 +499,11 @@ while(~done)
     end
 end
 
-true_aberrants = true_aberrants'; % makes into a vertical vector
 hold on, imshow(aberrants), hold off % show on same plot
 if(~exist('true_aberrants','var'))
-    true_aberrants = -1; % initialize
+    true_aberrants = []; % initialize
 end
+true_aberrants = true_aberrants'; % makes into a vertical vector
 pause(1)
 close(gcf)
 %% Aberrant Classification
@@ -817,7 +915,7 @@ for i = 1:chromosomes.NumObjects
     centromere = regionprops(body & bwB, 'centroid');
     centromere = struct2cell(centromere);
     if(~(exist('XY','var') && i == chromosomes.NumObjects))
-        centromere = int64(centromere{1});
+        centromere = uint64(centromere{1});
     end % unpack the structure
     %     overall = insertShape(overall,'circle',[centromere(1),centromere(2),6], 'color', 'blue'); % DELETE
     
@@ -845,6 +943,12 @@ image_data.Chromosomes = chromosomes.PixelIdxList;
 if(size(image_data.Foci_Distances, 1) == 1)
     image_data.Foci_Distances = image_data.Foci_Distances'; % makes data organization consistent
 end
+%%
+eror = 0;
+for i = 1:length(image_data.Chromosome_Length)
+    eror = eror + sum(image_data.Chromosome_Length(i) < image_data.Foci_Distances{i});
+end
+display(eror)
 
 %% TODO
 %   - allow user to edit Foci and Centromeres
