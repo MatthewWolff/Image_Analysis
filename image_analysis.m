@@ -2,7 +2,7 @@
 % location = input('Supply (in single quotes) the filepath to image folder');
 % img = imread(location);
 close all
-location = '~/Desktop/College/Research/PayseurLab/male3.tif'; % DELETE
+location = '~/Desktop/College/Research/PayseurLab/male.tif'; % DELETE
 img = imread(location);
 % % Creates list of all .tif files in the directory provided
 % files = dir(strcat(location,'/*.tif')); %finds all matching files
@@ -307,9 +307,9 @@ for i = 1:redFound.NumObjects
     blue_red = cat(3,red,a,blue);
     figure,imshowpair(blank, blue_red,'montage')
     if centromeres.NumObjects == 0
-        title('A chromosome with 0 centromeres has been detected! Click on the image where the centromere should go.')
+        title('A chromosome with 0 centromeres has been detected! Click on the image where the centromere should go, or hit enter to ignore.')
     else
-        title('A chromosome with multiple centromeres has been detected! Hit Enter to ignore.')
+        title('A chromosome with multiple centromeres has been detected! Hit Enter to ignore, or add one by clicking.')
     end
     myFig = gcf;
     pos = get(myFig,'position');
@@ -318,12 +318,12 @@ for i = 1:redFound.NumObjects
     while(~done)
         
         blank = refresh; % makes sure the user receives a fresh image
-        
-        hold on,imshowpair(blank, blue_red,'montage')
+        combo = cat(3,imcomplement(imcomplement(blank) & bwB),blank,imcomplement(a));
+        hold on,imshowpair(combo, blue_red,'montage')
         if centromeres.NumObjects == 0
-            title('A chromosome with 0 centromeres has been detected! Click on the image where the centromere should go.')
+            title('A chromosome with 0 centromeres has been detected! Click on the image where the centromere should go, or hit enter to ignore.')
         else
-            title('A chromosome with multiple centromeres has been detected! Hit Enter to ignore.')
+            title('A chromosome with multiple centromeres has been detected! Hit Enter to ignore, or add one by clicking.')
         end
         myFig = gcf;
         set(myFig,'position',[pos(1:2)*0.5 pos(3:4)*2]);
@@ -385,7 +385,6 @@ for i = 1:redFound.NumObjects
             center = imdilate(new_centromere, [seBegin seEnd]);
             new_centromere = imfill(center, 'holes');
         end
-        new_centromere = find(new_centromere); % store linear coordinates
         bwB(new_centromere) = 1;
         bwB = bwB & bwR; % clean up
     end
@@ -834,8 +833,8 @@ for i = 1:length(redraw)
     new_chromosome = edge(new_chromosome,'sobel', threshold * fudgeFactor);
     
     % dilate and fill the drawn line
-    seBegin = strel('line', 2, 75); % arbitrarily set to 75. Increase for thickness
-    seEnd = strel('line', 2, 0);
+    seBegin = strel('line', 3, 100); 
+    seEnd = strel('line', 3, 0);
     lines = imdilate(new_chromosome, [seBegin seEnd]);
     new_chromosome = imfill(lines, 'holes');
     
@@ -915,14 +914,14 @@ for i = 1:chromosomes.NumObjects
     centromere = regionprops(body & bwB, 'centroid');
     centromere = struct2cell(centromere);
     if(~(exist('XY','var') && i == chromosomes.NumObjects))
-        centromere = uint64(centromere{1});
+        centromere = uint32(centromere{1});
     end % unpack the structure
     %     overall = insertShape(overall,'circle',[centromere(1),centromere(2),6], 'color', 'blue'); % DELETE
     
     % find centroids of foci
     foci = regionprops(body & bwG, 'centroid');
     if(isempty(foci)), continue, end % skip this chromosome if there aren't any foci
-    foci = int64(cat(1, foci.Centroid));
+    foci = int32(cat(1, foci.Centroid));
     %     overall = insertShape(overall,'line',[foci(1,1),foci(1,2),foci(2,1),foci(2,2)], 'color', 'green'); % DELETE
     %     imshow(overall)
     
@@ -943,14 +942,9 @@ image_data.Chromosomes = chromosomes.PixelIdxList;
 if(size(image_data.Foci_Distances, 1) == 1)
     image_data.Foci_Distances = image_data.Foci_Distances'; % makes data organization consistent
 end
-%%
-eror = 0;
-for i = 1:length(image_data.Chromosome_Length)
-    eror = eror + sum(image_data.Chromosome_Length(i) < image_data.Foci_Distances{i});
-end
-display(eror)
-
 %% TODO
+%   - allow user input to understand a fragment that's overlapping another
+%   chromosome.... yikes @ overlapmale
 %   - allow user to edit Foci and Centromeres
 %   - evaluate the percent error of the diagonal vs horizontal issue by
 %       using snipped yarn on solid black background
