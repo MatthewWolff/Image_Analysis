@@ -1,10 +1,12 @@
 %% Image Analysis
 % location = input('Supply (in single quotes) the filepath to image folder');
 % img = imread(location);
+clear image_data
+clear chromosomes
 close all
-location = '~/Desktop/College/Research/PayseurLab/male.tif'; % DELETE
+location = '~/Desktop/College/Research/PayseurLab/bluemale.tif'; % DELETE
 img = imread(location);
-% % Creates list of all .tif files in the directory provided
+% Creates list of all .tif files in the directory provided
 % files = dir(strcat(location,'/*.tif')); %finds all matching files
 % file_names = {files.name};
 % file_names = file_names'; % transpose so correct dimensions
@@ -32,7 +34,7 @@ just_green = cat(3, a, green, a);
 just_blue = cat(3, a, a, blue);
 
 images = [img, just_red; just_green, just_blue];
-% montage(images,'Size', [1 1]), title('Raw Color Channels');
+montage(images,'Size', [1 1]), title('Raw Color Channels');
 
 
 %% Detection of Red
@@ -288,6 +290,7 @@ end
 % figure, imshow(area_list),title('Potential Aberrants, Area')
 %% Aberrant Detection - Centromere method
 centromere_deviants = zeros(1,redFound.NumObjects);
+
 for i = 1:redFound.NumObjects
     blank = logical(a); % creates blank logical matrix
     blank(redFound.PixelIdxList{i}) = 1; % plots chromosome
@@ -387,6 +390,7 @@ for i = 1:redFound.NumObjects
         end
         bwB(new_centromere) = 1;
         bwB = bwB & bwR; % clean up
+        image_data.Composite = cat(3,bwR,bwB,bwG);
     end
     
     hold on, imshowpair(blank, blue_red,'montage'), hold off
@@ -400,7 +404,17 @@ centromere_list = logical(a);
 for i = 1:length(centromere_deviants)
     centromere_list(redFound.PixelIdxList{centromere_deviants(i)}) = 1;
 end
-% figure,imshow(centromere_list),title('Potential Aberrants, Centromere')
+
+% TODO
+% detect abnormally large centromeres
+centromere_sizes = cellfun('length',blueFound.PixelIdxList);
+too_large = mean(centromere_sizes) + 1.5*iqr(centromere_sizes);
+too_large = find(centromere_sizes >= too_large);
+
+
+
+
+figure,imshow(centromere_list),title('Potential Aberrants, Centromere')
 
 %% User Input?
 all_deviants = unique(horzcat(area_deviants, corner_deviants,centromere_deviants)); % collects aberrants
@@ -514,9 +528,10 @@ if(true_aberrants ~= -1) % skip if there aren't aberrants
     figure % creates new window to use
     for i = 1:length(true_aberrants)
         
-        if(sum(found_fragments(found_fragments == true_aberrants(i)))) % skips found fragments
-            continue
-        end
+%         TODO: remove this :( 
+%         if(sum(found_fragments(found_fragments == true_aberrants(i)))) % skips found fragments
+%             continue
+%         end
         
         blank = logical(a); % creates blank logical matrix
         blank(redFound.PixelIdxList{true_aberrants(i)}) = 1; % assigns all the listed pixels to 1
@@ -788,7 +803,8 @@ chromosomes.PixelIdxList = chromosomes.PixelIdxList(~cellfun('isempty',chromosom
 %% Spline Measuring
 % creates storage structure for data
 image_data = struct('Chromosome_Length', {zeros(chromosomes.NumObjects,1)},...
-    'Foci_Distances', {[]},'Chromosomes',{[]},'Male', isMale);
+    'Foci_Distances', {[]},'Chromosomes',{[]},'Male', isMale,...
+    'Original', img, 'Composite', overlay, 'Dijkstra', overlay);
 for i = 1:length(redraw)
     
     old_chromosome = logical(a); % creates blank logical matrix
@@ -802,7 +818,7 @@ for i = 1:length(redraw)
     
     old_chromosome = imcomplement(old_chromosome);
     imshow(old_chromosome)
-    title('Please click along the length of the aberrant(s) to show the true chromosome.')
+    title('Please click along the length of one (one) of the chromosomes contained in the aberrant. You will be showing the true chromosome(s) it contains.')
     
     figh = gcf;
     if(i == 1), pos = get(figh,'position'); end
@@ -906,9 +922,13 @@ for i = 1:chromosomes.NumObjects
     map(skeleton == 1) = 1; % makes the skeletal path the lowest cost
     
     % display - DELETE
-    blank = logical(a); blank(chromosomes.PixelIdxList{i}) = 1;
+    blank = logical(a); 
+    blank(chromosomes.PixelIdxList{i}) = 1;
     overall = overall + cat(3, blank, logical(skeleton), logical(outlines{i}));
     imshowpair(img, overall, 'montage'); hold on
+    
+    % store Dijkstra image
+    image_data.Dijkstra = logical(overall);
     
     % find centroid of centromere
     centromere = regionprops(body & bwB, 'centroid');
@@ -934,7 +954,7 @@ for i = 1:chromosomes.NumObjects
         continue
     end
     [distance, path] = dijkstra_image(map, centromere, foci);
-    image_data.Foci_Distances{i} = distance;
+    image_data.Foci_Distances{i} = sort(distance);
     hold off
 end
 
@@ -942,9 +962,29 @@ image_data.Chromosomes = chromosomes.PixelIdxList;
 if(size(image_data.Foci_Distances, 1) == 1)
     image_data.Foci_Distances = image_data.Foci_Distances'; % makes data organization consistent
 end
+close all
+montage([overall,overlay,double(img)],'Size', [1 1]); title('Raw Color Channels');
+% imshowpair(image_data.Composite,image_data.Dijkstra,'montage')
+%% Extract Data -> [Chromosome Length, Foci Distances (if any)]
+new_size = max(cellfun('length',image_data.Foci_Distances));
+extracted_data = zeros(length(image_data.Foci_Distances),new_size);
+for i = 1:length(image_data.Foci_Distances)
+   new_row = zeros(1,new_size);
+   for j = 1:length(cell2mat(image_data.Foci_Distances(i)))
+       values = cell2mat(image_data.Foci_Distances(i));
+       new_row(j) = values(j);
+   end
+   extracted_data(i,:) = new_row;
+end
+sort(extracted_data, 2)
+extracted_data = horzcat(image_data.Chromosome_Length,extracted_data);
+display(extracted_data)
 %% TODO
-%   - allow user input to understand a fragment that's overlapping another
-%   chromosome.... yikes @ overlapmale
+%   - remove auto-ignore for fragments ? dont remove the fragments from the
+%   list
+%   - fix the crash when the user misses the chromosome for centromere
+%   placement
+%   - user CANNOT just hit ok on aberrant classification
 %   - allow user to edit Foci and Centromeres
 %   - evaluate the percent error of the diagonal vs horizontal issue by
 %       using snipped yarn on solid black background
