@@ -5,6 +5,8 @@ clear image_data
 clear chromosomes
 close all
 location = '~/Desktop/College/Research/PayseurLab/mess.tif'; % DELETE
+%location = 'C:\Users\alpeterson7\Documents\matt wolf\WSB1 (5).tif';
+
 img = imread(location);
 % Creates list of all .tif files in the directory provided
 % files = dir(strcat(location,'/*.tif')); %finds all matching files
@@ -993,7 +995,7 @@ sort(extracted_data, 2)
 extracted_data = horzcat(image_data.Chromosome_Length,extracted_data);
 display(extracted_data)
 %% TODO
-%   - remove auto-ignore for fragments ? dont remove the fragments from the
+%   - remove auto-ignore for fragments ?Â dont remove the fragments from the
 %   list
 %   - allow user to edit Foci and Centromeres
 %   - evaluate the percent error of the diagonal vs horizontal issue by
