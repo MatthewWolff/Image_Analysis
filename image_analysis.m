@@ -5,6 +5,8 @@ clear image_data
 clear chromosomes
 close all
 location = '~/Desktop/College/Research/PayseurLab/male.tif'; % DELETE
+%location = 'C:\Users\alpeterson7\Documents\matt wolf\WSB1 (5).tif';
+
 img = imread(location);
 % Creates list of all .tif files in the directory provided
 % files = dir(strcat(location,'/*.tif')); %finds all matching files
@@ -34,10 +36,8 @@ just_green = cat(3, a, green, a);
 just_blue = cat(3, a, a, blue);
 
 images = [img, just_red; just_green, just_blue];
-montage(images,'Size', [1 1]), title('Raw Color Channels');
-resize_window = @(positions, magnitude) [pos(1:2)-50*magnitude, pos(3:4)+100*magnitude];
-
-
+% montage(images,'Size', [1 1]), title('Raw Color Channels');
+resize_window = @(positions, magnitude) [positions(1:2)-50*magnitude, positions(3:4)+100*magnitude];
 
 %% Detection of Red
 
@@ -168,7 +168,7 @@ while numFound ~= numOfCentromeres
         break
     end
 end
-%
+
 % figure, imshowpair(img, label2rgb(labelmatrix(blueFound)), 'montage')
 % title(strcat(['Binarized Blue Channel, Centromeres identified = ', ...
 %     num2str(numFound), ', threshold = ', num2str(threshold)]))
@@ -224,25 +224,27 @@ end
 overlay = double(cat(3, bwR, bwG, bwB));
 figure, imshowpair(overlay, img, 'montage');
 title('Final Rendering of Centromere and Foci on SC')
+figh = gcf;
+pos = get(figh,'position');
+set(figh,'position',resize_window(pos,6));
 
 % Construct a questdlg with three options
 choice = questdlg('Would you like to add foci?', ...
-	'Optional Foci Addition','Yes','No','No'); % last option is default
+    'Optional Foci Addition','Yes','No','No'); % last option is default
 
-refresh = overlay;
+refresh = imcomplement(overlay); % for visual ease
 
 done = false; % sentinel value for completion
 if(strcmp(choice,'No')) % skip if user doesn't want to add foci
     done = true;
 end
-% JUMP POINT - DELETE
 while(~done)
     
     temp = refresh; % makes sure the user receives a fresh image
     
     % customizes display
     beep
-    figure, imshow(temp), title('Please click where you would like to add foci.')
+    figure, imshow(temp), title('Please click where you would like to add foci. Press enter when done.')
     figh = gcf;
     pos = get(figh,'position');
     set(figh,'position',resize_window(pos,6));
@@ -272,19 +274,19 @@ while(~done)
     % Create circles where the user clicks
     if(size(user_input,1) > 1)
         for i = 1:length(user_input) % marks user input
-            temp = insertShape(double(temp),'circle',[x(i),y(i),3], 'color', 'white');
+            temp = insertShape(double(temp),'circle',[x(i),y(i),3], 'color', 'black');
         end
     elseif size(user_input,1) == 1
-        temp = insertShape(double(temp),'circle',[x,y,3], 'color', 'white');
+        temp = insertShape(double(temp),'circle',[x,y,3], 'color', 'black');
     elseif size(user_input,1) == 0
         break % user didn't want to mark any aberrants
     end
     
     hold on, imshow(temp), hold off % show the user's clicks
-   
+    
     
     choice = questdlg('Add foci to these locations?', ...
-	'Foci Confirmation','Yes','Redo','Yes'); % last option is default
+        'Foci Confirmation','Yes','Redo','Yes'); % last option is default
     
     % invalid clicks are not allowed, restart if there are any
     if(strcmp(choice,'Yes'))
@@ -908,67 +910,75 @@ chromosomes.PixelIdxList = chromosomes.PixelIdxList(~cellfun('isempty',chromosom
 image_data = struct('Chromosome_Length', {zeros(chromosomes.NumObjects,1)},...
     'Foci_Distances', {[]},'Chromosomes',{[]},'Male', isMale,...
     'Original', img, 'Composite', overlay, 'Dijkstra', overlay);
+
+
 for i = 1:length(redraw)
-    
-    old_chromosome = logical(a); % creates blank logical matrix
-    if(sum(found_fragments == redraw(i))) % if the redraw is a fragment, show all fragments
-        for j = 1:length(found_fragments)
-            old_chromosome(redFound.PixelIdxList{found_fragments(j)}) = 1;
+    done = false;
+    while(~done) % redraw until satisfactory
+        old_chromosome = logical(a); % creates blank logical matrix
+        if(sum(found_fragments == redraw(i))) % if the redraw is a fragment, show all fragments
+            for j = 1:length(found_fragments)
+                old_chromosome(redFound.PixelIdxList{found_fragments(j)}) = 1;
+            end
+        else
+            old_chromosome(redFound.PixelIdxList{redraw(i)}) = 1; % assigns all the listed pixels to 1
         end
-    else
-        old_chromosome(redFound.PixelIdxList{redraw(i)}) = 1; % assigns all the listed pixels to 1
-    end
-    
-    old_chromosome = imcomplement(old_chromosome);
-    imshow(old_chromosome)
-    title('Please click along the length of one (one) of the chromosomes contained in the aberrant. You will be showing the true chromosome(s) it contains.')
-    
-    figh = gcf;
-    if(i == 1), pos = get(figh,'position'); end
-    set(figh,'position',resize_window(pos,6));
-    
-    % splining
-    [y,x] = ginput;
-    coord = [x,y];
-    distance = 0;
-    new_chromosome = logical(a); % creates blank logical matrix
-    for j = 2:size(coord,1)
-        % accumulate distances
-        distance = distance + pdist([coord(j-1,:);coord(j,:)], 'euclidean');
         
-        % create splines (1 per iteration)
-        yLength = linspace(coord(j-1,2),coord(j,2),1000)';
-        xLength = linspace(coord(j-1,1),coord(j,1),1000)';
-        coords = unique(uint32(ceil([xLength,yLength])),'rows','stable');
-        linear_indices = sub2ind(size(a),coords(:,1),coords(:,2));
-        new_chromosome(linear_indices) = 1; % create the skinny line
+        old_chromosome = imcomplement(old_chromosome);
+        imshow(old_chromosome)
+        title('Please click along the length of one (one) of the chromosomes contained in the aberrant. You will be showing the true chromosome(s) it contains.')
+        
+        figh = gcf;
+        if(i == 1), pos = get(figh,'position'); end
+        set(figh,'position',resize_window(pos,6));
+        
+        % splining
+        [y,x] = ginput;
+        coord = [x,y];
+        distance = 0;
+        new_chromosome = logical(a); % creates blank logical matrix
+        for j = 2:size(coord,1)
+            % accumulate distances
+            distance = distance + pdist([coord(j-1,:);coord(j,:)], 'euclidean');
+            
+            % create splines (1 per iteration)
+            yLength = linspace(coord(j-1,2),coord(j,2),1000)';
+            xLength = linspace(coord(j-1,1),coord(j,1),1000)';
+            coords = unique(uint32(ceil([xLength,yLength])),'rows','stable');
+            linear_indices = sub2ind(size(a),coords(:,1),coords(:,2));
+            new_chromosome(linear_indices) = 1; % create the skinny line
+        end
+        
+        % stores distance
+        image_data.Chromosome_Length(length(chromosomes.PixelIdxList) + 1) = distance;
+        
+        % prepare to dilate
+        [~, threshold] = edge(new_chromosome, 'sobel');
+        new_chromosome = edge(new_chromosome,'sobel', threshold * fudgeFactor);
+        
+        % dilate and fill the drawn line
+        seBegin = strel('line', 3, 100);
+        seEnd = strel('line', 3, 0);
+        lines = imdilate(new_chromosome, [seBegin seEnd]);
+        new_chromosome = imfill(lines, 'holes');
+        
+        % smoothen
+        newSmooth = imgaussfilt(double(new_chromosome), 1); % makes the image smooth so that there aren't cuts in the chromosome
+        new_chromosome = imbinarize(newSmooth, graythresh(newSmooth)); % binarizes again
+        
+        % show
+        show_new = logical(a);
+        show_new(new_chromosome) = 1;
+        
+        imshowpair(old_chromosome,imcomplement(show_new))
+        figh = gcf;
+        set(figh,'position',resize_window(pos,6));
+        
+        choice = questdlg('Is this redrawn chromosome okay?','Redraw Confirmation','Yes','Redraw','Yes');
+        if(strcmp(choice,'Yes'))
+            done = true;
+        end
     end
-    
-    % stores distance
-    image_data.Chromosome_Length(length(chromosomes.PixelIdxList) + 1) = distance;
-    
-    % prepare to dilate
-    [~, threshold] = edge(new_chromosome, 'sobel');
-    new_chromosome = edge(new_chromosome,'sobel', threshold * fudgeFactor);
-    
-    % dilate and fill the drawn line
-    seBegin = strel('line', 3, 100);
-    seEnd = strel('line', 3, 0);
-    lines = imdilate(new_chromosome, [seBegin seEnd]);
-    new_chromosome = imfill(lines, 'holes');
-    
-    % smoothen
-    newSmooth = imgaussfilt(double(new_chromosome), 1); % makes the image smooth so that there aren't cuts in the chromosome
-    new_chromosome = imbinarize(newSmooth, graythresh(newSmooth)); % binarizes again
-    
-    % show
-    show_new = logical(a);
-    show_new(new_chromosome) = 1;
-    
-    imshowpair(old_chromosome,imcomplement(show_new))
-    figh = gcf;
-    set(figh,'position',resize_window(pos,6));
-    pause(1)
     
     % store
     chromosomes.PixelIdxList{length(chromosomes.PixelIdxList) + 1} = find(new_chromosome ~= 0); % store the new chromosome
@@ -1068,9 +1078,9 @@ end
 close all
 
 % display for user
-subplot(1,3,1), imshow(img)
-subplot(1,3,2), imshow(overall)
-subplot(1,3,3), imshow(double(overlay))
+subplot(1,3,1), imshow(img), title('Original Image')
+subplot(1,3,2), imshow(double(overlay)), title('Composite Image')
+subplot(1,3,3), imshow(overall), title('Final Dijkstra Image')
 figh = gcf;
 pos = get(figh,'position');
 set(figh,'position',[pos(1)-50*6, pos(2)-100, pos(3)+100*6,pos(4)]);
@@ -1090,7 +1100,7 @@ sort(extracted_data, 2)
 extracted_data = horzcat(image_data.Chromosome_Length,extracted_data);
 display(extracted_data)
 %% TODO
-%   - remove auto-ignore for fragments ? dont remove the fragments from the
+%   - remove auto-ignore for fragments ?Â dont remove the fragments from the
 %   list
 %   - allow user to edit Foci and Centromeres
 %   - evaluate the percent error of the diagonal vs horizontal issue by
