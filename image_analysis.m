@@ -3,7 +3,7 @@
 % img = imread(location);
 clear
 close all
-location = '~/Desktop/College/Research/PayseurLab/mess.tif'; % DELETE
+location = '~/Desktop/College/Research/PayseurLab/goodmale5.tif'; % DELETE
 %location = 'C:\Users\alpeterson7\Documents\matt wolf\WSB1 (5).tif';
 
 img = imread(location);
@@ -1070,9 +1070,15 @@ for i = 1:chromosomes.NumObjects
     centromere = regionprops(body & bwB, 'centroid');
     centromere = struct2cell(centromere);
     % won't look for centromeres in an XY chromosome
+   
     if(~(exist('XY','var') && i == chromosomes.NumObjects)) 
         % if an error occurs here, the centromere was missed when redrawing
-        centromere = uint32(centromere{1}); % unpack the structure 
+        try
+            centromere = uint32(centromere{1}); % unpack the structure
+        catch
+            warning('A non-XY chromosome with foci present could not be measured due to lack of centromere.')
+            continue % :(
+        end
     end 
     
     % find centroids of foci
@@ -1123,8 +1129,5 @@ sort(extracted_data, 2)
 extracted_data = horzcat(image_data.Chromosome_Length,extracted_data);
 display(extracted_data)
 %% TODO
-%   - remove auto-ignore for fragments ? dont remove the fragments from the
-%   list
-%   - allow user to edit Foci and Centromeres
 %   - evaluate the percent error of the diagonal vs horizontal issue by
 %       using snipped yarn on solid black background
