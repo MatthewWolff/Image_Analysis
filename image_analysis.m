@@ -1,10 +1,9 @@
 %% Image Analysis
 % location = input('Supply (in single quotes) the filepath to image folder');
 % img = imread(location);
-clear image_data
-clear chromosomes
+clear
 close all
-location = '~/Desktop/College/Research/PayseurLab/male.tif'; % DELETE
+location = '~/Desktop/College/Research/PayseurLab/mess.tif'; % DELETE
 %location = 'C:\Users\alpeterson7\Documents\matt wolf\WSB1 (5).tif';
 
 img = imread(location);
@@ -383,9 +382,42 @@ for i = 1:length(area_deviants) %cycles thru aberrants
 end
 
 % figure, imshow(area_list),title('Potential Aberrants, Area')
+
+%% Removal of Abnormally Large Centromeres
+% detect abnormally large centromeres
+centromere_sizes = cellfun('length',blueFound.PixelIdxList);
+too_large = mean(centromere_sizes) + 1.5*iqr(centromere_sizes);
+if(~isempty(too_large)) % if offenders present
+    too_large = find(centromere_sizes >= too_large); % find offenders
+    for i = 1:length(too_large) % decide whether or not to remove them
+        blank = logical(a);
+        blank(blueFound.PixelIdxList{too_large(i)}) = 1;
+        figure, imshowpair(blank,bwR)
+        figh = gcf;
+        pos = get(figh,'position');
+        set(figh,'position',resize_window(pos,6));
+        
+        choice = questdlg('Remove abnormal centromere?','Large Centromere detected',...
+            'Yes','Ignore','Ignore');
+        if(strcmp(choice,'Yes'))
+            % remove offender
+            blueFound.PixelIdxList{too_large(i)} = [];
+            blueFound.NumObjects = blueFound.NumObjects - 1;
+            blueFound.PixelIdxList = blueFound.PixelIdxList(~cellfun('isempty',blueFound.PixelIdxList));
+            
+            % update blue channel to reflect removal
+            new_blue = logical(a);
+            for j = 1:blueFound.NumObjects
+                new_blue(blueFound.PixelIdxList{j}) = 1;
+            end
+            bwB = new_blue;
+        end
+        close(gcf)
+    end
+end
+
 %% Aberrant Detection - Centromere method
 centromere_deviants = zeros(1,redFound.NumObjects);
-
 for i = 1:redFound.NumObjects
     blank = logical(a); % creates blank logical matrix
     blank(redFound.PixelIdxList{i}) = 1; % plots chromosome
@@ -501,16 +533,7 @@ for i = 1:length(centromere_deviants)
     centromere_list(redFound.PixelIdxList{centromere_deviants(i)}) = 1;
 end
 
-% TODO
-% detect abnormally large centromeres
-centromere_sizes = cellfun('length',blueFound.PixelIdxList);
-too_large = mean(centromere_sizes) + 1.5*iqr(centromere_sizes);
-too_large = find(centromere_sizes >= too_large);
-
-
-
-
-figure,imshow(centromere_list),title('Potential Aberrants, Centromere')
+% figure,imshow(centromere_list),title('Potential Aberrants, Centromere')
 
 %% User Input?
 all_deviants = unique(horzcat(area_deviants, corner_deviants,centromere_deviants)); % collects aberrants
@@ -1046,17 +1069,17 @@ for i = 1:chromosomes.NumObjects
     % find centroid of centromere
     centromere = regionprops(body & bwB, 'centroid');
     centromere = struct2cell(centromere);
-    if(~(exist('XY','var') && i == chromosomes.NumObjects))
-        centromere = uint32(centromere{1});
-    end % unpack the structure
-    %     overall = insertShape(overall,'circle',[centromere(1),centromere(2),6], 'color', 'blue'); % DELETE
+    % won't look for centromeres in an XY chromosome
+    if(~(exist('XY','var') && i == chromosomes.NumObjects)) 
+        % if an error occurs here, the centromere was missed when redrawing
+        centromere = uint32(centromere{1}); % unpack the structure 
+    end 
     
     % find centroids of foci
     foci = regionprops(body & bwG, 'centroid');
     if(isempty(foci)), continue, end % skip this chromosome if there aren't any foci
     foci = int32(cat(1, foci.Centroid));
-    %     overall = insertShape(overall,'line',[foci(1,1),foci(1,2),foci(2,1),foci(2,2)], 'color', 'green'); % DELETE
-    %     imshow(overall)
+
     
     if(exist('XY','var') && i == chromosomes.NumObjects)
         [distance, ~] = dijkstra_image(map, XY.Centromeres(1,:), XY.Centromeres(2,:));
