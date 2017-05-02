@@ -4,7 +4,7 @@
 clear image_data
 clear chromosomes
 close all
-location = '~/Desktop/College/Research/PayseurLab/mess.tif'; % DELETE
+location = '~/Desktop/College/Research/PayseurLab/male.tif'; % DELETE
 img = imread(location);
 % Creates list of all .tif files in the directory provided
 % files = dir(strcat(location,'/*.tif')); %finds all matching files
@@ -35,6 +35,8 @@ just_blue = cat(3, a, a, blue);
 
 images = [img, just_red; just_green, just_blue];
 montage(images,'Size', [1 1]), title('Raw Color Channels');
+resize_window = @(positions, magnitude) [pos(1:2)-50*magnitude, pos(3:4)+100*magnitude];
+
 
 
 %% Detection of Red
@@ -219,13 +221,104 @@ end
 
 %% Review the New Composite
 % Simplify the image by only green and blue areas that overlap red
-overlay = cat(3, bwR, bwG, bwB);
-figure, imshowpair(img, overlay, 'montage');
+overlay = double(cat(3, bwR, bwG, bwB));
+figure, imshowpair(overlay, img, 'montage');
 title('Final Rendering of Centromere and Foci on SC')
 
-% disp('Pausing for 4 seconds before closing images. Click on this window and hit ctrl-C to preserve them')
-% pause(4)
-% close all
+% Construct a questdlg with three options
+choice = questdlg('Would you like to add foci?', ...
+	'Optional Foci Addition','Yes','No','No'); % last option is default
+
+refresh = overlay;
+
+done = false; % sentinel value for completion
+if(strcmp(choice,'No')) % skip if user doesn't want to add foci
+    done = true;
+end
+% JUMP POINT - DELETE
+while(~done)
+    
+    temp = refresh; % makes sure the user receives a fresh image
+    
+    % customizes display
+    beep
+    figure, imshow(temp), title('Please click where you would like to add foci.')
+    figh = gcf;
+    pos = get(figh,'position');
+    set(figh,'position',resize_window(pos,6));
+    
+    % receive user input
+    [x,y, buttons] = ginput;
+    user_input = uint32([x,y]); % cast this because it needs to be an integer
+    
+    % if the user hits the delete key
+    if(sum(ismember(buttons, 8)))
+        toRemove = find(buttons == 8) - 1; % remove the click before
+        
+        if(~sum(ismember(toRemove, 0))) % checks for delete key as first press
+            user_input(toRemove,:) = 0; % marks the bad click
+            user_input(toRemove + 1,:) = 0; % marks the delete-key press
+            user_input(ismember(user_input, [0,0],'rows'),:) = []; % deletes
+            % corrects coordinates too
+            x = user_input(:,1);
+            y = user_input(:,2);
+        else
+            uiwait(msgbox('Delete-key pressed too early.','Warning','modal'));
+            close(gcf)
+            continue
+        end
+    end
+    
+    % Create circles where the user clicks
+    if(size(user_input,1) > 1)
+        for i = 1:length(user_input) % marks user input
+            temp = insertShape(double(temp),'circle',[x(i),y(i),3], 'color', 'white');
+        end
+    elseif size(user_input,1) == 1
+        temp = insertShape(double(temp),'circle',[x,y,3], 'color', 'white');
+    elseif size(user_input,1) == 0
+        break % user didn't want to mark any aberrants
+    end
+    
+    hold on, imshow(temp), hold off % show the user's clicks
+   
+    
+    choice = questdlg('Add foci to these locations?', ...
+	'Foci Confirmation','Yes','Redo','Yes'); % last option is default
+    
+    % invalid clicks are not allowed, restart if there are any
+    if(strcmp(choice,'Yes'))
+        done = true;
+    else
+        close(gcf)
+        continue; %re-do
+    end
+    
+    % create the foci
+    new_foci = logical(a);
+    x = user_input(:,1); y = user_input(:,2);
+    point = [x-1,y-1;x-1,y;x-1,y+1;x,y-1;x,y+1;x+1,y+1;x+1,y;x+1,y-1];
+    center = sub2ind(size(new_foci), point(:,2),point(:,1));
+    new_foci(center) = 1;
+    
+    for iterations = 1:4 % grow the centromere
+        % prepare to dilate
+        [~, threshold] = edge(new_foci, 'sobel');
+        new_foci = edge(new_foci,'sobel', threshold * fudgeFactor);
+        
+        % dilate and fill the drawn line
+        seBegin = strel('line', 2, 100);
+        seEnd = strel('line', 2, -1);
+        center = imdilate(new_foci, [seBegin seEnd]);
+        new_foci = imfill(center, 'holes');
+    end
+    
+    bwG(new_foci) = 1; % add to pre-existing foci
+    bwG = bwG & bwR; % clean up (remove any green that doesn't overlap red)
+    
+    overlay = double(cat(3, bwR, bwG, bwB)); % update
+end
+close(gcf)
 
 %% Aberrant Detection - Minimum Eigenvalue Method
 %Determine length of chromosome and distance from centromere to all foci
@@ -316,7 +409,7 @@ for i = 1:redFound.NumObjects
     end
     myFig = gcf;
     pos = get(myFig,'position');
-    set(myFig,'position',[pos(1:2)*0.5 pos(3:4)*2]);
+    set(myFig,'position',resize_window(pos,6));
     done = false; % sentinel value for completion
     while(~done)
         
@@ -329,12 +422,12 @@ for i = 1:redFound.NumObjects
             title('A chromosome with multiple centromeres has been detected! Hit Enter to ignore, or add one by clicking.')
         end
         myFig = gcf;
-        set(myFig,'position',[pos(1:2)*0.5 pos(3:4)*2]);
+        set(myFig,'position',resize_window(pos,6));
         % customizes display
         
         % receive user input
         [x,y] = ginput(1);
-        user_input = uint32([x,y]); % divide by two bc paired image
+        user_input = uint32([x,y]);
         
         % Create circles where the user clicks
         if (size(user_input,1) == 1)
@@ -439,7 +532,7 @@ while(~done)
     figure, imshow(aberrants), title('Please click each aberrant silhouette. Use the delete key if you make any mistakes - it will remove the most recent click. Hit enter when done.')
     figh = gcf;
     pos = get(figh,'position');
-    set(figh,'position',[pos(1:2)*0.5 pos(3:4)*3]);
+    set(figh,'position',resize_window(pos,6));
     
     % receive user input
     [x,y, buttons] = ginput;
@@ -525,14 +618,9 @@ close(gcf)
 chromosomes = struct('PixelIdxList', {redFound.PixelIdxList},'NumObjects', redFound.NumObjects);
 found_fragments = []; % keep track of which chromosomes are fragments
 redraw = []; % keep track of which need to be redrawn
-if(true_aberrants ~= -1) % skip if there aren't aberrants
+if(~isempty(true_aberrants)) % skip if there aren't aberrants
     figure % creates new window to use
     for i = 1:length(true_aberrants)
-        
-        %         TODO: remove this :(
-        %         if(sum(found_fragments(found_fragments == true_aberrants(i)))) % skips found fragments
-        %             continue
-        %         end
         
         blank = logical(a); % creates blank logical matrix
         blank(redFound.PixelIdxList{true_aberrants(i)}) = 1; % assigns all the listed pixels to 1
@@ -540,7 +628,7 @@ if(true_aberrants ~= -1) % skip if there aren't aberrants
         
         figh = gcf;
         if(i == 1), pos = get(figh,'position'); end
-        set(figh,'position',[pos(1:2)*0.75 pos(3:4)*3]);
+        set(figh,'position',resize_window(pos,6));
         
         if(i == 1) % show instructions, and if male, tell them to designate the XY
             pause(1)
@@ -622,7 +710,7 @@ if(true_aberrants ~= -1) % skip if there aren't aberrants
                         figure, imshow(aberrants), title('Please click on each end of the XY chromosome')
                         myFig = gcf;
                         pos = get(myFig,'position');
-                        set(myFig,'position',[pos(1:2)*0.5 pos(3:4)*3]);
+                        set(myFig,'position',resize_window(pos,6));
                         
                         % receive user input
                         [x,y, buttons] = ginput;
@@ -718,7 +806,7 @@ if(true_aberrants ~= -1) % skip if there aren't aberrants
                         figure, imshow(aberrants), title('Please click all fragments of the chromosome in question')
                         myFig = gcf;
                         pos = get(myFig,'position');
-                        set(myFig,'position',[pos(1:2)*0.5 pos(3:4)*3]);
+                        set(myFig,'position',resize_window(pos,6));
                         
                         % receive user input
                         [x,y, buttons] = ginput;
@@ -793,16 +881,18 @@ if(true_aberrants ~= -1) % skip if there aren't aberrants
                     end
                     
                     hold on, imshow(aberrants), hold off
-                    pause(1)
+                    pause(1) % allow user to see
                     close(gcf)
                     valid = true;
                     
-                    chromosomes.NumObjects = chromosomes.NumObjects - (length(fragments)-1);
-                    for j = 1:length(fragments) % remove all fragments from list
-                        chromosomes.PixelIdxList{fragments(j)} = [];
-                    end
+                    % keep a list of fragments chunks, and redraw
+                    chromosomes.PixelIdxList{true_aberrants(i)} = [];
                     found_fragments = unique([found_fragments, fragments]);
                     redraw = [redraw,true_aberrants(i)];
+                case 'c' % chunk of a broken fragment
+                    chromosomes.PixelIdxList{true_aberrants(i)} = [];
+                    chromosomes.NumObjects = chromosomes.NumObjects - 1;
+                    valid = true;
                 otherwise
                     uiwait(msgbox('Invalid Input.','modal'));
             end
@@ -813,7 +903,7 @@ end
 % clean up list
 chromosomes.PixelIdxList = chromosomes.PixelIdxList(~cellfun('isempty',chromosomes.PixelIdxList))';
 
-%% Spline Measuring
+%% Spline Measuring - Redraw
 % creates storage structure for data
 image_data = struct('Chromosome_Length', {zeros(chromosomes.NumObjects,1)},...
     'Foci_Distances', {[]},'Chromosomes',{[]},'Male', isMale,...
@@ -835,7 +925,7 @@ for i = 1:length(redraw)
     
     figh = gcf;
     if(i == 1), pos = get(figh,'position'); end
-    set(figh,'position',[pos(1:2)*0.75 pos(3:4)*3]);
+    set(figh,'position',resize_window(pos,6));
     
     % splining
     [y,x] = ginput;
@@ -877,7 +967,7 @@ for i = 1:length(redraw)
     
     imshowpair(old_chromosome,imcomplement(show_new))
     figh = gcf;
-    set(figh,'position',[pos(1:2)*0.75 pos(3:4)*3]);
+    set(figh,'position',resize_window(pos,6));
     pause(1)
     
     % store
@@ -976,8 +1066,15 @@ if(size(image_data.Foci_Distances, 1) == 1)
     image_data.Foci_Distances = image_data.Foci_Distances'; % makes data organization consistent
 end
 close all
-montage([overall,overlay,double(img)],'Size', [1 1]); title('Raw Color Channels');
-% imshowpair(image_data.Composite,image_data.Dijkstra,'montage')
+
+% display for user
+subplot(1,3,1), imshow(img)
+subplot(1,3,2), imshow(overall)
+subplot(1,3,3), imshow(double(overlay))
+figh = gcf;
+pos = get(figh,'position');
+set(figh,'position',[pos(1)-50*6, pos(2)-100, pos(3)+100*6,pos(4)]);
+
 %% Extract Data -> [Chromosome Length, Foci Distances (if any)]
 new_size = max(cellfun('length',image_data.Foci_Distances));
 extracted_data = zeros(length(image_data.Foci_Distances),new_size);
