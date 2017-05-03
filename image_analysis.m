@@ -1,27 +1,19 @@
-%% Image Analysis
-% location = input('Supply (in single quotes) the filepath to image folder');
-% img = imread(location);
-clear
+function [extracted_data,image_data] = image_analysis(location)
+
+% % Image Analysis
+clearvars -except location
 close all
-location = '~/Desktop/College/Research/PayseurLab/goodmale5.tif'; % DELETE
-%location = 'C:\Users\alpeterson7\Documents\matt wolf\WSB1 (5).tif';
+% location = '~/Desktop/College/Research/PayseurLab/8feb17_17mar16_G_f5_sp1_4_revfemale.tif'; % DELETE
+% location = 'C:\Users\alpeterson7\Documents\matt wolf\WSB1 (5).tif'; % DELETE
 
 img = imread(location);
-% Creates list of all .tif files in the directory provided
-% files = dir(strcat(location,'/*.tif')); %finds all matching files
-% file_names = {files.name};
-% file_names = file_names'; % transpose so correct dimensions
-% file_path = cell(size(file_names,1), 1); % paste filepaths onto names
-% file_path(:) = {location};
-% file_paths = strcat(file_path,file_names);
-
 flag = false; % DELETE - to mark when a bad image has been given
 % in the case of a bad image, analysis will continue in spite of that by
 % disregarding the previous expected values (e.g. centromere #)
 
 % Determine if the slide is male or female from filepath
 [~,name,~] = fileparts(location);
-isFemale = regexp(name,'female');
+isFemale = regexp(name,'female','ONCE');
 isMale = isempty(isFemale);
 
 % Split Channels -
@@ -34,7 +26,7 @@ just_red = cat(3, red, a, a);
 just_green = cat(3, a, green, a);
 just_blue = cat(3, a, a, blue);
 
-images = [img, just_red; just_green, just_blue];
+% images = [img, just_red; just_green, just_blue];
 % montage(images,'Size', [1 1]), title('Raw Color Channels');
 resize_window = @(positions, magnitude) [positions(1:2)-50*magnitude, positions(3:4)+100*magnitude];
 
@@ -86,8 +78,8 @@ while numFound ~= 20
         dilationOn = dilationOn + 1;
         continue
     elseif (numFound < 20 && dilationOn == 1) || dilationFactor >= 120
-        warning('Bad image')
-        beep
+        %         warning('Bad image')
+        %         beep
         flag = true;
         break
     end
@@ -223,6 +215,7 @@ end
 overlay = double(cat(3, bwR, bwG, bwB));
 figure, imshowpair(overlay, img, 'montage');
 title('Final Rendering of Centromere and Foci on SC')
+
 figh = gcf;
 pos = get(figh,'position');
 set(figh,'position',resize_window(pos,6));
@@ -385,25 +378,28 @@ end
 
 %% Removal of Abnormally Large Centromeres
 % detect abnormally large centromeres
+centromere_deviants = zeros(1,redFound.NumObjects); % initialize
 centromere_sizes = cellfun('length',blueFound.PixelIdxList);
-too_large = mean(centromere_sizes) + 1.5*iqr(centromere_sizes);
-if(~isempty(too_large)) % if offenders present
-    too_large = find(centromere_sizes >= too_large); % find offenders
-    for i = 1:length(too_large) % decide whether or not to remove them
+too_large = mean(centromere_sizes) + 2*iqr(centromere_sizes);
+too_small = mean(centromere_sizes) - 1.5*iqr(centromere_sizes);
+abnormal = find(centromere_sizes >= too_large | centromere_sizes <= too_small); % find offenders
+if(~isempty(abnormal)) % if offenders present
+    removed = 0;
+    for i = 1:length(abnormal) % decide whether or not to remove them
         blank = logical(a);
-        blank(blueFound.PixelIdxList{too_large(i)}) = 1;
-        figure, imshowpair(blank,bwR)
+        blank(blueFound.PixelIdxList{abnormal(i)}) = 1;
+        combo = cat(3,imcomplement(bwR & blank),imcomplement(bwR),imcomplement(a));
+        figure, imshowpair(combo,img,'montage')
         figh = gcf;
         pos = get(figh,'position');
         set(figh,'position',resize_window(pos,6));
         
-        choice = questdlg('Remove abnormal centromere?','Large Centromere detected',...
+        choice = questdlg('Remove abnormal centromere in blue?','Abnormal Centromere detected',...
             'Yes','Ignore','Ignore');
         if(strcmp(choice,'Yes'))
             % remove offender
-            blueFound.PixelIdxList{too_large(i)} = [];
-            blueFound.NumObjects = blueFound.NumObjects - 1;
-            blueFound.PixelIdxList = blueFound.PixelIdxList(~cellfun('isempty',blueFound.PixelIdxList));
+            blueFound.PixelIdxList{abnormal(i)} = [];
+            removed = removed + 1;
             
             % update blue channel to reflect removal
             new_blue = logical(a);
@@ -414,10 +410,11 @@ if(~isempty(too_large)) % if offenders present
         end
         close(gcf)
     end
+    blueFound.NumObjects = blueFound.NumObjects - removed;
+    blueFound.PixelIdxList = blueFound.PixelIdxList(~cellfun('isempty',blueFound.PixelIdxList));
 end
 
 %% Aberrant Detection - Centromere method
-centromere_deviants = zeros(1,redFound.NumObjects);
 for i = 1:redFound.NumObjects
     blank = logical(a); % creates blank logical matrix
     blank(redFound.PixelIdxList{i}) = 1; % plots chromosome
@@ -430,25 +427,26 @@ for i = 1:redFound.NumObjects
         centromere_deviants(i) = i;
     end
     
-    blank = imcomplement(blank); % flips colors so easier to use cross-hair
-    refresh = blank;
+    combo = cat(3,imcomplement(blank & bwB),imcomplement(blank),imcomplement(a));
+    refresh = combo;
     
     beep
     blue_red = cat(3,red,a,blue);
-    figure,imshowpair(blank, blue_red,'montage')
+    figure,imshowpair(combo, blue_red,'montage')
     if centromeres.NumObjects == 0
         title('A chromosome with 0 centromeres has been detected! Click on the image where the centromere should go, or hit enter to ignore.')
     else
         title('A chromosome with multiple centromeres has been detected! Hit Enter to ignore, or add one by clicking.')
     end
+    
     myFig = gcf;
     pos = get(myFig,'position');
     set(myFig,'position',resize_window(pos,6));
+    
     done = false; % sentinel value for completion
     while(~done)
         
-        blank = refresh; % makes sure the user receives a fresh image
-        combo = cat(3,imcomplement(imcomplement(blank) & bwB),blank,imcomplement(a));
+        combo = refresh; % makes sure the user receives a fresh image
         hold on,imshowpair(combo, blue_red,'montage')
         if centromeres.NumObjects == 0
             title('A chromosome with 0 centromeres has been detected! Click on the image where the centromere should go, or hit enter to ignore.')
@@ -458,49 +456,57 @@ for i = 1:redFound.NumObjects
         myFig = gcf;
         set(myFig,'position',resize_window(pos,6));
         % customizes display
+        uiwait(msgbox('Please add/remove centromeres if & when necessary.','Instructions','modal'));
         
         % receive user input
-        [x,y] = ginput(1);
-        user_input = uint32([x,y]);
+        [x,y, buttons] = ginput;
+        user_input = uint32([x,y]); % cast this because it needs to be an integer
+        
+        % if the user hits the delete key
+        if(sum(ismember(buttons, 8)))
+            toRemove = find(buttons == 8) - 1; % remove the click before
+            
+            if(~sum(ismember(toRemove, 0))) % checks for delete key as first press
+                user_input(toRemove,:) = 0; % marks the bad click
+                user_input(toRemove + 1,:) = 0; % marks the delete-key press
+                user_input(ismember(user_input, [0,0],'rows'),:) = []; % deletes
+                % corrects coordinates too
+                x = user_input(:,1);
+                y = user_input(:,2);
+            else
+                uiwait(msgbox('Delete-key pressed too early.','Warning','modal'));
+                close(gcf)
+                continue
+            end
+        end
         
         % Create circles where the user clicks
-        if (size(user_input,1) == 1)
-            blank = insertShape(double(blank),'circle',[x,y,3], 'color', 'red');
-            imshowpair(blank, blue_red,'montage')
+        if(size(user_input,1) > 1)
+            for j = 1:length(user_input) % marks user input
+                combo = insertShape(double(combo),'circle',[x(j),y(j),4], 'color', 'black');
+            end
+        elseif size(user_input,1) == 1
+            combo = insertShape(double(combo),'circle',[x,y,4], 'color', 'black');
         elseif size(user_input,1) == 0
             centromere_deviants(i) = i;
             break % user didn't want to mark any aberrants
         end
         
-        [y,x] = ind2sub(size(a),redFound.PixelIdxList{i}); % somehow this returns y then x....
-        coords = [x,y];
+        hold on, imshow(combo), hold off % show the user's clicks
         
-        match = intersect(user_input,coords,'rows'); % do any coordinates on this silhouette match user input?
-        if ~isempty(match)
-            
-            blank = insertShape(double(blank),'circle',[match(1,1),match(1,2),3],...
-                'color', 'green','LineWidth', 2); % confirms it on picture
-        end
+        choice = questdlg('Add centromeres to these locations?', ...
+            'Centromere Confirmation','Yes','Redo','Yes'); % last option is default
         
-        % Only keeps track of user input that doesn't find a match
-        toRemove = find(ismember(user_input, match,'rows'));
-        if(~isempty(toRemove)) % in case user clicks on same chromosome twice
-            user_input(toRemove, :) = [];
-        end
-        
-        hold on, imshowpair(blank, blue_red,'montage'), hold off % show the user's clicks
-        
-        % invalid clicks are not allowed, restart if there are any
-        if(~isempty(user_input))
-            uiwait(msgbox('Not all user input points were found.','Warning','modal'));
-            continue; % try again until correct response given
-        else
+        if(strcmp(choice,'Yes'))
             done = true;
+        else
+            close(gcf)
+            continue; %re-do
         end
         
         % create the centromere
         new_centromere = logical(a);
-        x = match(2); y = match(1);
+        x = user_input(:,2); y = user_input(:,1);
         point = [x-1,y-1;x-1,y;x-1,y+1;x,y-1;x,y+1;x+1,y+1;x+1,y;x+1,y-1];
         center = sub2ind(size(new_centromere), point(:,1),point(:,2));
         new_centromere(center) = 1;
@@ -518,10 +524,10 @@ for i = 1:redFound.NumObjects
         end
         bwB(new_centromere) = 1;
         bwB = bwB & bwR; % clean up
-        image_data.Composite = cat(3,bwR,bwB,bwG);
+        image_data.Composite = cat(3,bwR,bwG,bwB);
     end
     
-    hold on, imshowpair(blank, blue_red,'montage'), hold off
+    hold on, imshowpair(combo, blue_red,'montage'), hold off
     pause(1)
     close(gcf)
     
@@ -535,7 +541,7 @@ end
 
 % figure,imshow(centromere_list),title('Potential Aberrants, Centromere')
 
-%% User Input?
+%% User Input - Aberrant Confirmation
 all_deviants = unique(horzcat(area_deviants, corner_deviants,centromere_deviants)); % collects aberrants
 
 aberrants = logical(a); % creates blank logical matrix
@@ -543,8 +549,8 @@ for i = 1:length(all_deviants) % cycles thru known aberrants
     aberrants(redFound.PixelIdxList{all_deviants(i)}) = 1; % marks them on plot
 end
 
-aberrants = imcomplement(aberrants); % flips colors so easier to use cross-hair
-refresh = aberrants;
+combo = cat(3,imcomplement(aberrants & bwB),imcomplement(aberrants),imcomplement(a));
+refresh = combo;
 
 clear('true_aberrants') % clears out any previous data
 done = false; % sentinel value for completion
@@ -558,6 +564,7 @@ while(~done)
     figh = gcf;
     pos = get(figh,'position');
     set(figh,'position',resize_window(pos,6));
+    uiwait(msgbox('Please identify any aberrants.','Instructions','modal'));
     
     % receive user input
     [x,y, buttons] = ginput;
@@ -640,31 +647,32 @@ pause(1)
 close(gcf)
 %% Aberrant Classification
 % create true list
+close all
 chromosomes = struct('PixelIdxList', {redFound.PixelIdxList},'NumObjects', redFound.NumObjects);
 found_fragments = []; % keep track of which chromosomes are fragments
 redraw = []; % keep track of which need to be redrawn
 if(~isempty(true_aberrants)) % skip if there aren't aberrants
     figure % creates new window to use
     for i = 1:length(true_aberrants)
-        
         blank = logical(a); % creates blank logical matrix
         blank(redFound.PixelIdxList{true_aberrants(i)}) = 1; % assigns all the listed pixels to 1
-        imshowpair(blank,bwR), title('Aberrant Designation')
+        figure(1),
+        subplot(1,2,1),imshowpair(blank,bwR), title('Aberrant Designation')
+        subplot(1,2,2),imshow(img), title('Original Image')
         
         figh = gcf;
-        if(i == 1), pos = get(figh,'position'); end
-        set(figh,'position',resize_window(pos,6));
-        
-        if(i == 1) % show instructions, and if male, tell them to designate the XY
-            pause(1)
+        if(i == 1),
+            pos = get(figh,'position');
+            set(figh,'position',resize_window(pos,6));
             prompt = {'This box can be left open.';'';...
                 'If the aberrant should be deleted, type "delete" or 0';...
                 'If the aberrant simply needs to be redrawn, type 1';...
                 'If there are multiple chromosomes, type the number (2 to 6)';...
                 'If the aberrant is part of a new fragmented chromosome, type "b"';...
                 'If the aberrant is part of known fragmented chromosome, type "c"'};
+            
             if(isMale)
-                prompt{7} = 'If the aberrant is the XY chromosome, type "xy"';
+                prompt{length(prompt) + 1} = 'If the aberrant is the XY chromosome, type "xy"';
             else
                 clear('XY') % if XY doesn't exist, Dijkstra's special case won't execute
             end
@@ -779,7 +787,6 @@ if(~isempty(true_aberrants)) % skip if there aren't aberrants
                         match = intersect(user_input,coords,'rows'); % do any coordinates on this silhouette match user input?
                         if ~isempty(match)
                             XY.Centromeres = match;
-                            XY_num = i;
                             aberrants = insertShape(double(aberrants),'circle',[match(1,1),match(1,2),3],...
                                 'color', 'green','LineWidth', 2); % confirms it on picture
                             
@@ -915,7 +922,7 @@ if(~isempty(true_aberrants)) % skip if there aren't aberrants
                     chromosomes.PixelIdxList{true_aberrants(i)} = [];
                     found_fragments = unique([found_fragments, fragments]);
                     redraw = [redraw,true_aberrants(i)];
-                case 'c' % chunk of a broken fragment
+                case 'c' % chunk of a known broken fragment
                     chromosomes.PixelIdxList{true_aberrants(i)} = [];
                     chromosomes.NumObjects = chromosomes.NumObjects - 1;
                     valid = true;
@@ -924,7 +931,7 @@ if(~isempty(true_aberrants)) % skip if there aren't aberrants
             end
         end
     end
-    close(gcf)
+    close(figure(1))
 end
 % clean up list
 chromosomes.PixelIdxList = chromosomes.PixelIdxList(~cellfun('isempty',chromosomes.PixelIdxList))';
@@ -934,7 +941,6 @@ chromosomes.PixelIdxList = chromosomes.PixelIdxList(~cellfun('isempty',chromosom
 image_data = struct('Chromosome_Length', {zeros(chromosomes.NumObjects,1)},...
     'Foci_Distances', {[]},'Chromosomes',{[]},'Male', isMale,...
     'Original', img, 'Composite', overlay, 'Dijkstra', overlay);
-
 
 for i = 1:length(redraw)
     done = false;
@@ -949,8 +955,8 @@ for i = 1:length(redraw)
         end
         
         old_chromosome = imcomplement(old_chromosome);
-        imshow(old_chromosome)
-        title('Please click along the length of one (one) of the chromosomes contained in the aberrant. You will be showing the true chromosome(s) it contains.')
+        figure, imshow(old_chromosome)
+        title('Please click along the length of one (1) of the chromosomes contained in the aberrant. e.g. Aberrants with 3 chromosomes within will be redrawn 3 times.')
         
         figh = gcf;
         if(i == 1), pos = get(figh,'position'); end
@@ -981,8 +987,8 @@ for i = 1:length(redraw)
         new_chromosome = edge(new_chromosome,'sobel', threshold * fudgeFactor);
         
         % dilate and fill the drawn line
-        seBegin = strel('line', 3, 100);
-        seEnd = strel('line', 3, 0);
+        seBegin = strel('line', 4, 100);
+        seEnd = strel('line', 4, 0);
         lines = imdilate(new_chromosome, [seBegin seEnd]);
         new_chromosome = imfill(lines, 'holes');
         
@@ -1008,6 +1014,7 @@ for i = 1:length(redraw)
     chromosomes.PixelIdxList{length(chromosomes.PixelIdxList) + 1} = find(new_chromosome ~= 0); % store the new chromosome
 end
 close(gcf)
+close(gcf)
 
 %% Measurements?
 % pre-allocate storage for each cell's outline to be used later
@@ -1018,10 +1025,6 @@ for i = 1:chromosomes.NumObjects % isolates each chromosome found
     
     blank = logical(a); % creates blank logical matrix
     blank(chromosomes.PixelIdxList{i}) = 1; % assigns all the listed pixels to 1
-    
-    % use perimeter function to get estimate
-    measure = regionprops(blank, 'perimeter');
-    perimFunction = measure.Perimeter/2;
     
     % outline
     [~, threshold] = edge(blank, 'sobel');
@@ -1049,6 +1052,7 @@ end
 % create a map of the image to pass to Dijkstra's method
 overall = overlay; % copies the type from a pre-existing variable
 overall(:) = 0; % clears it out
+no_centromere = zeros(chromosomes.NumObjects,1);
 for i = 1:chromosomes.NumObjects
     body = logical(a); % blank map of 0's
     body(chromosomes.PixelIdxList{i}) = 1; % body of chromosome
@@ -1058,11 +1062,11 @@ for i = 1:chromosomes.NumObjects
     map(outlines{i} ~= 0) = 3; % makes the perimeter higher cost
     map(skeleton == 1) = 1; % makes the skeletal path the lowest cost
     
-    % display - DELETE
+    % % display
     blank = logical(a);
     blank(chromosomes.PixelIdxList{i}) = 1;
     overall = overall + cat(3, blank, logical(skeleton), logical(outlines{i}));
-    imshowpair(img, overall, 'montage'); hold on
+    %     imshowpair(img, overall, 'montage'); hold on
     
     % store Dijkstra image
     image_data.Dijkstra = logical(overall);
@@ -1071,22 +1075,23 @@ for i = 1:chromosomes.NumObjects
     centromere = regionprops(body & bwB, 'centroid');
     centromere = struct2cell(centromere);
     % won't look for centromeres in an XY chromosome
-   
-    if(~(exist('XY','var') && i == chromosomes.NumObjects)) 
+    
+    if(~(exist('XY','var') && i == chromosomes.NumObjects))
         % if an error occurs here, the centromere was missed when redrawing
         try
             centromere = uint32(centromere{1}); % unpack the structure
         catch
-            warning('A non-XY chromosome with foci present could not be measured due to lack of centromere.')
+            warning('A non-XY chromosome (#%i) with foci present could not be measured due to lack of centromere.',i)
+            no_centromere(i) = i;
             continue % :(
         end
-    end 
+    end
     
     % find centroids of foci
     foci = regionprops(body & bwG, 'centroid');
     if(isempty(foci)), continue, end % skip this chromosome if there aren't any foci
     foci = int32(cat(1, foci.Centroid));
-
+    
     
     if(exist('XY','var') && i == chromosomes.NumObjects)
         [distance, ~] = dijkstra_image(map, XY.Centromeres(1,:), XY.Centromeres(2,:));
@@ -1096,7 +1101,7 @@ for i = 1:chromosomes.NumObjects
         hold off
         continue
     end
-    [distance, path] = dijkstra_image(map, centromere, foci);
+    [distance, ~] = dijkstra_image(map, centromere, foci);
     image_data.Foci_Distances{i} = sort(distance);
     hold off
 end
@@ -1108,12 +1113,19 @@ end
 close all
 
 % display for user
-subplot(1,3,1), imshow(img), title('Original Image')
-subplot(1,3,2), imshow(double(overlay)), title('Composite Image')
-subplot(1,3,3), imshow(overall), title('Final Dijkstra Image')
+newFound = struct();
+newFound.('Connectivity') = 16;
+newFound.('ImageSize') = size(a);
+newFound.('NumObjects') = length(image_data.Chromosome_Length);
+newFound.('PixelIdxList') = image_data.Chromosomes';
+
+subplot(2,2,1), imshow(img), title('Original Image')
+subplot(2,2,2), imshow(double(overlay)), title('Composite Image')
+subplot(2,2,3), imshow(label2rgb(labelmatrix(newFound),'hsv','w', 'shuffle')), title('Color Label')
+subplot(2,2,4), imshow(overall), title('Final Dijkstra Image')
 figh = gcf;
 pos = get(figh,'position');
-set(figh,'position',[pos(1)-50*6, pos(2)-100, pos(3)+100*6,pos(4)]);
+set(figh,'position',resize_window(pos,8));
 
 %% Extract Data -> [Chromosome Length, Foci Distances (if any)]
 new_size = max(cellfun('length',image_data.Foci_Distances));
@@ -1126,9 +1138,12 @@ for i = 1:length(image_data.Foci_Distances)
     end
     extracted_data(i,:) = new_row;
 end
-sort(extracted_data, 2)
-extracted_data = horzcat(image_data.Chromosome_Length,extracted_data);
-display(extracted_data)
-%% TODO
-%   - evaluate the percent error of the diagonal vs horizontal issue by
-%       using snipped yarn on solid black background
+sort(extracted_data, 2); % arrange foci (column wise) by distance
+
+% create final table
+extracted_data = horzcat(image_data.Chromosome_Length,extracted_data,-no_centromere);
+names = horzcat('Length', strcat(repmat({'Foci_'},size(extracted_data,2)-2,1),...
+    cellfun(@(x) num2str(x),num2cell(1:size(extracted_data,2)-2)'))','Skipped');
+extracted_data = array2table(extracted_data, 'VariableNames', names);
+% display(extracted_data)
+end
