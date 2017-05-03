@@ -26,7 +26,7 @@ visited = zeros(length(nodes),1); % all false
 distance = Inf(length(nodes),1); % all infinite until otherwise known
 predecessor = zeros(length(nodes),1); % the list to help us find paths
 distance(node(origin)) = 0; % the distance to each node of the node list
-        
+
 for i = 1:length(nodes)
     tempA = Inf;
     tempB = -1;   % graph not connected or no unvisited vertices

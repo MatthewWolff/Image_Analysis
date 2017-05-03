@@ -415,6 +415,7 @@ if(~isempty(abnormal)) % if offenders present
 end
 
 %% Aberrant Detection - Centromere method
+message_counter = 1; % set this to 0 after a message is given so it isn't repeated
 for i = 1:redFound.NumObjects
     blank = logical(a); % creates blank logical matrix
     blank(redFound.PixelIdxList{i}) = 1; % plots chromosome
@@ -456,7 +457,10 @@ for i = 1:redFound.NumObjects
         myFig = gcf;
         set(myFig,'position',resize_window(pos,6));
         % customizes display
-        uiwait(msgbox('Please add/remove centromeres if & when necessary.','Instructions','modal'));
+        if message_counter
+            uiwait(msgbox('Please add/remove centromeres if & when necessary.','Instructions','modal'));
+            message_counter = 0;
+        end
         
         % receive user input
         [x,y, buttons] = ginput;
@@ -1011,9 +1015,9 @@ for i = 1:length(redraw)
     end
     
     % store
-    chromosomes.PixelIdxList{length(chromosomes.PixelIdxList) + 1} = find(new_chromosome ~= 0); % store the new chromosome
+    chromosomes.PixelIdxList{length(chromosomes.PixelIdxList) + 1} = find(new_chromosome ~= 0);
+    close(gcf)% store the new chromosome
 end
-close(gcf)
 close(gcf)
 
 %% Measurements?
