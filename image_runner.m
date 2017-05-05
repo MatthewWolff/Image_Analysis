@@ -1,5 +1,7 @@
 %% Image Analysis Batch Runner
 location = '~/Desktop/College/Research/PayseurLab/';
+%location = 'C:\Users\alpeterson7\Documents\imageAnalysis\hand measures\G male\';
+
 files = dir(strcat(location,'/*.tif')); % finds all matching files
 while(isempty(files)) % user input when necessary
     location = inputdlg('Please supply the filepath to the image folder');
