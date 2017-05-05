@@ -665,7 +665,7 @@ if(~isempty(true_aberrants)) % skip if there aren't aberrants
         subplot(1,2,2),imshow(img), title('Original Image')
         
         figh = gcf;
-        if(i == 1),
+        if(i == 1)
             pos = get(figh,'position');
             set(figh,'position',resize_window(pos,6));
             prompt = {'This box can be left open.';'';...
