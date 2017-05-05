@@ -1057,7 +1057,7 @@ end
 overall = overlay; % copies the type from a pre-existing variable
 overall(:) = 0; % clears it out
 no_centromere = zeros(chromosomes.NumObjects,1);
-chromosome_centers = {};
+chromosome_centers = cell(chromosomes.NumObjects,1);
 for i = 1:chromosomes.NumObjects
     body = logical(a); % blank map of 0's
     body(chromosomes.PixelIdxList{i}) = 1; % body of chromosome
