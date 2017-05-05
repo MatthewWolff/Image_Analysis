@@ -1,9 +1,9 @@
 %% Image Analysis Batch Runner
-% location = '~/Desktop/College/Research/PayseurLab/';
+location = '~/Desktop/College/Research/PayseurLab/';
 files = dir(strcat(location,'/*.tif')); % finds all matching files
 while(isempty(files)) % user input when necessary
     location = inputdlg('Please supply the filepath to the image folder');
-    location = strcat(location{1},'/');
+    location = location{1};
     files = dir(strcat(location,'/*.tif')); % finds all matching files
 end
 file_names = {files.name}';
