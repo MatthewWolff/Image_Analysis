@@ -3,7 +3,7 @@ function [extracted_data,image_data] = image_analysis(location)
 % % Image Analysis
 clearvars -except location
 close all
-% location = '~/Desktop/College/Research/PayseurLab/8feb17_17mar16_G_f5_sp1_4_revfemale.tif'; % DELETE
+% location = '~/Desktop/College/Research/PayseurLab/female.tif'; % DELETE
 % location = 'C:\Users\alpeterson7\Documents\matt wolf\WSB1 (5).tif'; % DELETE
 
 img = imread(location);
@@ -944,7 +944,7 @@ chromosomes.PixelIdxList = chromosomes.PixelIdxList(~cellfun('isempty',chromosom
 % creates storage structure for data
 image_data = struct('Chromosome_Length', {zeros(chromosomes.NumObjects,1)},...
     'Foci_Distances', {[]},'Chromosomes',{[]},'Male', isMale,...
-    'Original', img, 'Composite', overlay, 'Dijkstra', overlay);
+    'Original', img, 'Composite', overlay, 'Dijkstra', overlay, 'Labeled', overlay);
 
 for i = 1:length(redraw)
     done = false;
@@ -1057,6 +1057,7 @@ end
 overall = overlay; % copies the type from a pre-existing variable
 overall(:) = 0; % clears it out
 no_centromere = zeros(chromosomes.NumObjects,1);
+chromosome_centers = {};
 for i = 1:chromosomes.NumObjects
     body = logical(a); % blank map of 0's
     body(chromosomes.PixelIdxList{i}) = 1; % body of chromosome
@@ -1066,9 +1067,15 @@ for i = 1:chromosomes.NumObjects
     map(outlines{i} ~= 0) = 3; % makes the perimeter higher cost
     map(skeleton == 1) = 1; % makes the skeletal path the lowest cost
     
-    % % display
+    % create body of chromosome for Dijkstra image
     blank = logical(a);
     blank(chromosomes.PixelIdxList{i}) = 1;
+    
+    % calculate center so we can later label it
+    tmp = struct2cell(regionprops(blank, 'centroid'));
+    chromosome_centers{i} = cellfun(@(x) uint32(x),tmp,'UniformOutput',false);
+    
+    % Dijkstra iamge
     overall = overall + cat(3, blank, logical(skeleton), logical(outlines{i}));
     %     imshowpair(img, overall, 'montage'); hold on
     
@@ -1118,15 +1125,24 @@ close all
 
 % display for user
 newFound = struct();
-newFound.('Connectivity') = 16;
+newFound.('Connectivity') = 8;
 newFound.('ImageSize') = size(a);
 newFound.('NumObjects') = length(image_data.Chromosome_Length);
 newFound.('PixelIdxList') = image_data.Chromosomes';
 
 subplot(2,2,1), imshow(img), title('Original Image')
 subplot(2,2,2), imshow(double(overlay)), title('Composite Image')
-subplot(2,2,3), imshow(label2rgb(labelmatrix(newFound),'hsv','w', 'shuffle')), title('Color Label')
+
+% label the chromosomes with their number
+color_map = label2rgb(labelmatrix(newFound),'hsv','w', 'shuffle');
+for i = 1:length(chromosome_centers)
+    center = chromosome_centers{i};
+    color_map = insertText(color_map,center{1}, i);
+end
+image_data.Labeled = color_map; % store
+subplot(2,2,3), imshow(color_map), title('Labeled Color Map')
 subplot(2,2,4), imshow(overall), title('Final Dijkstra Image')
+
 figh = gcf;
 pos = get(figh,'position');
 set(figh,'position',resize_window(pos,8));
