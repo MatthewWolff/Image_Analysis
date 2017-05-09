@@ -13,7 +13,7 @@ flag = false; % DELETE - to mark when a bad image has been given
 
 % Determine if the slide is male or female from filepath
 [~,name,~] = fileparts(location);
-isFemale = regexp(name,'female','ONCE');
+isFemale = regexp(name,'_f','ONCE');
 isMale = isempty(isFemale);
 
 % Split Channels -
