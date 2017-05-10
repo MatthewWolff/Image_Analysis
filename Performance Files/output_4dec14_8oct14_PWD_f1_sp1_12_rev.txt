@@ -1,0 +1,33 @@
+4dec14_8oct14_PWD_f1_sp1_12_rev.tif
+score: 4
+ans = 
+
+    Length    Foci_1    Foci_2    Skipped
+    ______    ______    ______    _______
+
+      89.5    25         0          0    
+      76.5    53         0          0    
+        76    32         0          0    
+      78.5    47         0          0    
+        84    43        67          0    
+      10.5     0         0         -6    
+        73     0         0          0    
+        56    22         0          0    
+      68.5    27         0          0    
+      88.5    67         0          0    
+       102    20        73          0    
+       115    52         0          0    
+      86.5    40         0          0    
+     115.5    26        81          0    
+       110     0         0          0    
+       101    62         0          0    
+        78    38         0          0    
+    94.596    15         0          0    
+    102.47    15        58          0    
+     106.8     0         0        -20    
+    126.68    98         0          0    
+
+*redrawn: 18, 19, 20, 21
+*6 is junk
+*20 is missing foci position measures because no centromere was detected.
+*18 is a folded chrm
